@@ -1,0 +1,31 @@
+---
+title: "PolyATAC analysis"
+author: "jjy"
+date: "2024-01-16"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## Load environment
+```{r,warning=FALSE,message=FALSE}
+library(Seurat)
+library(Signac)
+source('E:\\PolyATAC_analysis\\tool\\clone_correlation.R')
+```
+## Load data
+```{r}
+obj = readRDS('E:\\gas_multiomi\\e105\\e105seurat.rds')
+```
+
+## Modalitties relationships
+Calculate the correlation between barcode+rna and barcode+atac
+```{r,warning=FALSE,message=FALSE}
+multi_rel = multi_relationship(obj)
+```
+
+## Boxplots comparing intraclonal and interclonal correlation
+```{r,warning=FALSE,message=FALSE}
+rna_atac_relationship(obj)
+```
