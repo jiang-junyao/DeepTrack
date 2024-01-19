@@ -20,20 +20,16 @@ multi_relationship = function(obj){
   multi_rela = multi_rela[multi_rela$Var1!=multi_rela$Var2,]
   colnames(multi_rela)[3:5] = c('lineage','rna','atac')
   min_num = min(multi_rela[,4],multi_rela[,5])
-  if (min_num-0.05 < 0) {
-    min_num = 0
-  }else{
-    min_num = min_num-0.05
-  }
+
   rl_slope = round(coef(lm(rna ~ lineage, data = multi_rela))[2],3)
   al_slope = round(coef(lm(atac ~ lineage, data = multi_rela))[2],3)
   p1=ggplot(multi_rela, aes(x = atac, y = lineage)) +
-    geom_point(size = 4) +
+    geom_point(size = 1) +
     labs(x = "ATAC pair correlation", y = "Barcode pair correlation") +
     theme_minimal()+xlim(c(min_num,1))+ylim(c(min_num,1))+geom_smooth(method = 'lm')+
     ggtitle(paste0('atac+lineage slope: ',al_slope))
   p2=ggplot(multi_rela, aes(x = rna, y = lineage)) +
-    geom_point(size = 4) +
+    geom_point(size = 1) +
     labs(x = "RNA pair correlation", y = "Barcode pair correlation") +
     theme_minimal()+xlim(c(min_num,1))+ylim(c(min_num,1))+geom_smooth(method = 'lm')+
     ggtitle(paste0('rna+lineage slope: ',rl_slope))
@@ -63,3 +59,39 @@ rna_atac_relationship <- function(obj){
     theme_minimal()+xlab('')+ylab('Expression-accessibilty corr')+
     theme(text = element_text(size=12),axis.text = element_text(size = 12))
 }
+
+
+sparse.cor <- function(x){
+  n <- nrow(x)
+  cMeans <- colMeans(x)
+  cSums <- colSums(x)
+  # Calculate the population covariance matrix.
+  # There's no need to divide by (n-1) as the std. dev is also calculated the same way.
+  # The code is optimized to minize use of memory and expensive operations
+  covmat <- tcrossprod(cMeans, (-2*cSums+n*cMeans))
+  crossp <- as.matrix(crossprod(x))
+  covmat <- covmat+crossp
+  sdvec <- sqrt(diag(covmat)) # standard deviations of columns
+  covmat/crossprod(t(sdvec)) # correlation matrix
+}
+single_cell_relationship <- function(obj,modality='RNA'){
+  cell_use = rownames(obj@meta.data)[!is.na(obj@meta.data$cell_fate)]
+  obj_plot = subset(obj,cells=cell_use)
+  cell_fate = obj_plot@meta.data[,c('cell_fate','cell_type')]
+  rna_cor = cor(as.matrix(GetAssayData(obj,assay = modality)),method = 'spearman')
+  rna_cor = reshape2::melt(rna_cor)
+  rna_cor$clone1 = cell_fate[match(rna_cor[,1],colnames(obj_plot)),1]
+  rna_cor$clone2 = cell_fate[match(rna_cor[,2],colnames(obj_plot)),1]
+  rna_cor$type = ifelse(rna_cor[,4]==rna_cor[,5],'intra','inter')
+  pval = t.test(rna_cor[rna_cor$type=='intra',3],
+                rna_cor[rna_cor$type=='inter',3])$p.value
+  rna_cor = rna_cor[!is.na(rna_cor[,5]),]
+  rna_cor = rna_cor[!is.na(rna_cor[,6]),]
+  ggplot(rna_cor,aes(x=type,y=value,fill=type))+geom_boxplot()+
+    theme_minimal()+xlab('')+ylab('Expression-accessibilty corr')+
+    theme(text = element_text(size=12),axis.text = element_text(size = 12))
+
+}
+
+
+

@@ -25,7 +25,17 @@ Calculate the correlation between barcode+rna and barcode+atac
 multi_rel = multi_relationship(obj)
 ```
 
-## Boxplots comparing intraclonal and interclonal correlation
+## Boxplots comparing intraclonal and interclonal correlation (clone level)
 ```{r,warning=FALSE,message=FALSE}
 rna_atac_relationship(obj)
+```
+
+## Boxplots comparing single cell rna correlation
+```{r,warning=FALSE,message=FALSE}
+single_cell_relationship(obj)
+```
+
+## Boxplots comparing single cell ATAC correlation
+```{r,warning=FALSE,message=FALSE}
+single_cell_relationship(obj,modality = 'ATAC')
 ```
