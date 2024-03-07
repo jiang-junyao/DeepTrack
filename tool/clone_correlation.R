@@ -78,7 +78,7 @@ single_cell_relationship <- function(obj,modality='RNA'){
   cell_use = rownames(obj@meta.data)[!is.na(obj@meta.data$barcodes)]
   obj_plot = subset(obj,cells=cell_use)
   cell_fate = obj_plot@meta.data[,c('barcodes','celltype')]
-  rna_cor = cor(as.matrix(GetAssayData(obj,assay = modality)),method = 'spearman')
+  rna_cor = cor(as.matrix(GetAssayData(obj_plot,assay = modality)),method = 'spearman')
   rna_cor = reshape2::melt(rna_cor)
   rna_cor$clone1 = cell_fate[match(rna_cor[,1],colnames(obj_plot)),1]
   rna_cor$clone2 = cell_fate[match(rna_cor[,2],colnames(obj_plot)),1]
