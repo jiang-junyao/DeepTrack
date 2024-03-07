@@ -1,18 +1,18 @@
-multi_relationship = function(obj){
+multi_relationship = function(obj,fit_method = 'lm'){
   library(ggplot2)
   library(FateMapper)
   ### seurat object with cell_fate & cell_type
   obj = NormalizeData(obj,assay = 'activity',normalization.method = 'LogNormalize')
   obj = NormalizeData(obj,assay = 'RNA',normalization.method = 'LogNormalize')
-  cell_use = rownames(obj@meta.data)[!is.na(obj@meta.data$cell_fate)]
+  cell_use = rownames(obj@meta.data)[!is.na(obj@meta.data$barcodes)]
   obj_plot = subset(obj,cells=cell_use)
-  obj_plot@active.ident = as.factor(obj_plot$cell_type)
+  obj_plot@active.ident = as.factor(obj_plot$celltype)
   ave_exp = AverageExpression(obj_plot,slot = 'data')$RNA
   ave_atac = AverageExpression(obj_plot,slot = 'data')$activity
   ave_atac = ave_atac[rowSums(ave_atac)>1,]
   cor.exp = reshape2::melt(cor(ave_exp,method = 'spearman'))
   cor.atac = reshape2::melt(cor(ave_atac,method = 'spearman'))
-  cell_fate = obj_plot@meta.data[,c('cell_fate','cell_type')]
+  cell_fate = obj_plot@meta.data[,c('barcodes','celltype')]
   cell_fate = cell_fate[!is.na(cell_fate[,1]),]
   colnames(cell_fate) = c('barcodes','celltype')
   cor.barcode = reshape2::melt(as.matrix(cell_type_fate_similartiy(cell_fate,plot=F,out_similar_mt = T,method = 'spearman')))
@@ -20,18 +20,18 @@ multi_relationship = function(obj){
   multi_rela = multi_rela[multi_rela$Var1!=multi_rela$Var2,]
   colnames(multi_rela)[3:5] = c('lineage','rna','atac')
   min_num = min(multi_rela[,4],multi_rela[,5])
-
+  
   rl_slope = round(coef(lm(rna ~ lineage, data = multi_rela))[2],3)
   al_slope = round(coef(lm(atac ~ lineage, data = multi_rela))[2],3)
   p1=ggplot(multi_rela, aes(x = atac, y = lineage)) +
     geom_point(size = 1) +
     labs(x = "ATAC pair correlation", y = "Barcode pair correlation") +
-    theme_minimal()+xlim(c(min_num,1))+ylim(c(min_num,1))+geom_smooth(method = 'lm')+
+    theme_minimal()+xlim(c(min_num,1))+geom_smooth(method = fit_method)+
     ggtitle(paste0('atac+lineage slope: ',al_slope))
   p2=ggplot(multi_rela, aes(x = rna, y = lineage)) +
     geom_point(size = 1) +
     labs(x = "RNA pair correlation", y = "Barcode pair correlation") +
-    theme_minimal()+xlim(c(min_num,1))+ylim(c(min_num,1))+geom_smooth(method = 'lm')+
+    theme_minimal()+xlim(c(min_num,1))+geom_smooth(method = fit_method)+
     ggtitle(paste0('rna+lineage slope: ',rl_slope))
   print(p1|p2)
   return(multi_rela)
@@ -75,9 +75,9 @@ sparse.cor <- function(x){
   covmat/crossprod(t(sdvec)) # correlation matrix
 }
 single_cell_relationship <- function(obj,modality='RNA'){
-  cell_use = rownames(obj@meta.data)[!is.na(obj@meta.data$cell_fate)]
+  cell_use = rownames(obj@meta.data)[!is.na(obj@meta.data$barcodes)]
   obj_plot = subset(obj,cells=cell_use)
-  cell_fate = obj_plot@meta.data[,c('cell_fate','cell_type')]
+  cell_fate = obj_plot@meta.data[,c('barcodes','celltype')]
   rna_cor = cor(as.matrix(GetAssayData(obj,assay = modality)),method = 'spearman')
   rna_cor = reshape2::melt(rna_cor)
   rna_cor$clone1 = cell_fate[match(rna_cor[,1],colnames(obj_plot)),1]
@@ -90,7 +90,6 @@ single_cell_relationship <- function(obj,modality='RNA'){
   ggplot(rna_cor,aes(x=type,y=value,fill=type))+geom_boxplot()+
     theme_minimal()+xlab('')+ylab('Expression-accessibilty corr')+
     theme(text = element_text(size=12),axis.text = element_text(size = 12))
-
 }
 
 
