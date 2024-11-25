@@ -1,0 +1,124 @@
+---
+title: "Figure3"
+author: "Jiang junyao"
+
+output: 
+  prettydoc::html_pretty:
+    toc: true
+    theme: cayman
+    highlight: github
+---
+Here is the script to generate figures in Figure 3 and related supplementary figures in the PolyATAC manuscript.
+
+## Load data
+```{r, message=FALSE,warning=FALSE}
+library(tidyverse)
+library(ggpubr)
+library(Seurat)
+library(BuenColors)
+source('/data/jiangjunyao/polyATAC/github_script/help_function/figure3_help_function.R')
+pm_smooth = readRDS('/data/jiangjunyao/polyATAC/github_script/data/pm_smooth.rds')
+sp_smooth = readRDS('/data/jiangjunyao/polyATAC/github_script/data/sp_smooth.rds')
+obj = readRDS('/data/jiangjunyao/polyATAC/nmp_final/nmp_sp_pm_only_rna.rds')
+group_df_20241115 = read.csv('/data/jiangjunyao/polyATAC/nmp_final/nmp_pseudotime_module/only_rna/group_df_20241115.csv',
+                             row.names = 1)
+Color1 <- c(rgb(72 / 255, 85 / 255, 167 / 255), rgb(255 / 255, 255 / 255, 255 / 255),
+            rgb(239 / 255, 58 / 255, 37 / 255))
+fate_col = c('#4DB6AC',
+             '#0D47A1','#1B5E20','#9ECAE1','#C5E1A5')
+names(fate_col) = c('Balance','Paraxial mesoderm','Spinal cord',"Paraxial_mesoderm_bias","Spinal_cord_bias")
+ct_col = c('#0D47A1','#1B5E20','#4DB6AC')
+names(ct_col) = c('Paraxial mesoderm','Spinal cord','Neuromesodermal progenitors')
+```
+
+## Plot NMP differentiation trajectory
+
+```{r, message=FALSE,warning=FALSE}
+plot_df = obj@meta.data
+plot_df$DiffusionMap_1 = obj@reductions$diffmap@cell.embeddings[,1]
+plot_df$DiffusionMap_2 = obj@reductions$diffmap@cell.embeddings[,2]
+ggplot(plot_df,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=celltype))+
+  geom_point(size=1.2)+scale_color_manual(values = fate_col)+
+  theme_void()+theme(text = element_text(size=16))+theme(legend.position = "none")
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/all_embedding_no_legend/fig3/NMP diffusion map embedding celltype.pdf',
+       width = 10,height = 8)
+ggplot(plot_df,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=celltype_ori))+
+  geom_point(size=1.2)+scale_color_manual(values = ct_col)+
+  theme_void()+theme(text = element_text(size=16))+theme(legend.position = "none")
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/all_embedding_no_legend/fig3/NMP diffusion map embedding celltype_original.pdf',
+       width = 10,height = 8)
+ggplot(plot_df,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=Pseudotime))+
+  geom_point(size=1.2)+scale_color_gradientn(colors = rev(jdb_palette("brewer_marine")))+
+  theme_void()+theme(text = element_text(size=16))+theme(legend.position = "none")
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/all_embedding_no_legend/fig3/NMP diffusion map embedding pseudotime.pdf',
+       width = 10,height = 8)
+ggplot(plot_df,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=sp_score))+
+  geom_point(size=1.2)+scale_color_viridis_c()+
+  theme_void()+theme(text = element_text(size=16))+theme(legend.position = "none")
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/all_embedding_no_legend/fig3/NMP diffusion map embedding spinal cord bias score.pdf',
+       width = 10,height = 8)
+ggplot(plot_df,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=pm_score))+
+  geom_point(size=1.2)+scale_color_viridis_c()+
+  theme_void()+theme(text = element_text(size=16))+theme(legend.position = "none")
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/all_embedding_no_legend/fig3/NMP diffusion map embedding paraxial mesoderm bias score.pdf',
+       width = 10,height = 8)
+```
+
+## Plot gene modules
+```r
+for (i in unique(group_df_20241115$module)) {
+  gene_use = group_df_20241115[group_df_20241115$module==i,1]
+  mt1 = as.matrix(obj@assays$RNA@data[gene_use,])
+  mt1 = colMeans(mt1)
+  embed = as.data.frame(obj@reductions$diffmap@cell.embeddings)
+  embed$expression = mt1
+  ggplot(embed,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=expression))+geom_point(size=1.2)+
+    scale_color_gradientn(colors = jdb_palette("brewer_celsius"))+theme_void()+
+    theme(text = element_text(size=16))+ggtitle(i)+guides(color = "none")
+  ggsave(paste0('/data/jiangjunyao/polyATAC/polyatac_figure/single cell fig/NMP_fate_analysis/module_average_expression/diffusionmap embedding_',i,'.pdf'),
+         width = 10,height = 8)
+  ggplot(embed,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=expression))+geom_point(size=1.2)+
+    scale_color_gradientn(colors = jdb_palette("brewer_celsius"))+theme_void()+
+    theme(text = element_text(size=16))+ggtitle(i)+guides(color = "none")
+  ggsave(paste0('/data/jiangjunyao/polyATAC/polyatac_figure/single cell fig/NMP_fate_analysis/module_average_expression/diffusionmap embedding_',i,'_nolenged.pdf'),
+         width = 10,height = 8)
+  df_exp = data.frame(c(colMeans(pm_smooth[[2]][gene_use,]),
+                        colMeans(sp_smooth[[2]][gene_use,])),
+                      c(1:100,1:100),
+                      c(rep('Mesoderm lineage',100),rep('Neuron lineage',100)))
+  colnames(df_exp) = c('expression','pseudotime','lineage')
+  ggplot(df_exp,aes(x=pseudotime,y=expression,color=lineage))+geom_line(size=1)+
+    theme_classic()+theme(text = element_text(size=16),plot.title = element_text(hjust = 0.5))+
+    scale_color_manual(values = c('#6950a1','#84bf96'))+ggtitle(i)+
+    ylab('Scaled expression')+scale_y_continuous(limits = c(0, 2))
+  ggsave(paste0('/data/jiangjunyao/polyATAC/polyatac_figure/single cell fig/NMP_fate_analysis/module_average_expression/lineplot_',i,'.pdf'),
+         width = 10,height = 8)
+}
+```
+
+### Plot single gene expression along trajectory
+```r
+for (i in group_df_20241115$X ) {
+  selected_gene = i
+  module_name = group_df_20241115[group_df_20241115$X==i,3]
+  mt1 = as.matrix(obj@assays$RNA@data[selected_gene,])
+  embed = as.data.frame(obj@reductions$diffmap@cell.embeddings)
+  embed$expression = mt1
+  ggplot(embed,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=expression))+geom_point(size=1.2)+
+    scale_color_gradientn(colors = jdb_palette("brewer_celsius"))+theme_void()+
+    theme(text = element_text(size=16))+ggtitle(i)+guides(color = "none")
+  ggsave(paste0('/data/jiangjunyao/polyATAC/polyatac_figure/single cell fig/NMP_fate_analysis/gene_pseudotime_dynamics/',module_name,'_',
+                i,'_UMAP.pdf'),width = 10,height = 8)
+  df_exp = data.frame(c(pm_smooth[[2]][selected_gene,],
+                        sp_smooth[[2]][selected_gene,]),
+                      c(1:100,1:100),
+                      c(rep('Mesoderm lineage',100),rep('Neuron lineage',100)))
+  colnames(df_exp) = c('expression','pseudotime','lineage')
+  ggplot(df_exp,aes(x=pseudotime,y=expression,color=lineage))+geom_line(size=1)+
+    theme_classic()+theme(text = element_text(size=16),plot.title = element_text(hjust = 0.5))+
+    scale_color_manual(values = c('#6950a1','#84bf96'))+ggtitle(selected_gene)+
+    ylab('Scaled expression')+scale_y_continuous(limits = c(0, 2))
+  ggsave(paste0('/data/jiangjunyao/polyATAC/polyatac_figure/single cell fig/NMP_fate_analysis/gene_pseudotime_dynamics/',module_name,'_',
+                i,'_line.pdf'),width = 10,height = 8)
+}
+```

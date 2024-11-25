@@ -1,0 +1,53 @@
+---
+title: "Figure2"
+author: "Jiang junyao"
+
+output: 
+  prettydoc::html_pretty:
+    toc: true
+    theme: cayman
+    highlight: github
+---
+Here is the script to generate figures in Figure 2 and related supplementary figures in the PolyATAC manuscript.
+
+## Load data
+```{r}
+library(tidyverse)
+library(ggpubr)
+library(BuenColors)
+celltype_color <- read.csv("/data/jiangjunyao/polyATAC/color_gcy.csv",header = F)
+celltype_color$V2 = gsub(' ','',celltype_color$V2)
+metadata = read.csv('/data/jiangjunyao/polyATAC/github_script/data/metadata_1125.csv',
+                    row.names = 1)
+```
+
+## Plot cell embedding
+
+```{r}
+ggplot(metadata,aes(x=umap1,y=umap2,color=celltype))+geom_point(size=0.1)+
+  scale_color_manual(values=celltype_color$V2,breaks = celltype_color$V1)+
+  theme_void()+theme(text = element_text(size=15))+theme(legend.position = "none")
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/all_embedding_no_legend/fig2/fig2_celltype.pdf',
+       width = 10,height = 8)
+
+germ_col = c('#98DF8AFF',
+             '#DBDB8DFF',
+             '#AEC7E8FF',
+             '#C5B0D5FF',
+             '#FFBB78FF')
+germ = c('NeuroEctoderm','SurfaceEctoderm','Mesoderm',
+         'Endoderm','Extraembryonic')
+ggplot(metadata,aes(x=umap1,y=umap2,color=germ))+geom_point(size=0.1)+
+  scale_color_manual(values=germ_col,breaks = germ)+
+  theme_void()+theme(text = element_text(size=15))+theme(legend.position = "none")
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/all_embedding_no_legend/fig2/fig2_germ.pdf',
+       width = 10,height = 8)
+
+ggplot(metadata,aes(x=umap1,y=umap2,color=time))+geom_point(size=0.1)+
+  theme_void()+theme(text = element_text(size=15))+
+  scale_color_manual(values = jdb_palette('brewer_spectra'))
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/all_embedding_no_legend/fig2/fig2_time.pdf',
+       width = 10,height = 8)
+```
+
+##
