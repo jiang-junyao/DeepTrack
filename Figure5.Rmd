@@ -1,0 +1,98 @@
+---
+title: "Figure5"
+author: "Jiang junyao"
+
+output: 
+  prettydoc::html_pretty:
+    toc: true
+    theme: cayman
+    highlight: github
+---
+Here is the script to generate figures in Figure 3 and related supplementary figures in the PolyATAC manuscript.
+
+## Load data
+```{r, message=FALSE,warning=FALSE}
+library(tidyverse)
+library(ggpubr)
+library(Hmisc)
+library(corrplot)
+library(Seurat)
+library(BuenColors)
+obj <- readRDS("~/polyATAC/Cdx2 ko/cdx2_ko_wt.rds")
+celltype_color <- read.csv("~/polyATAC/color_gcy.csv", header=FALSE)
+celltype_color$V2 = gsub(' ','',celltype_color$V2)
+```
+
+## Plot NMP differentiation trajectory
+
+```{r, message=FALSE,warning=FALSE}
+plot_df = obj@meta.data
+plot_df$DiffusionMap_1 = obj@reductions$umap@cell.embeddings[,1]
+plot_df$DiffusionMap_2 = obj@reductions$umap@cell.embeddings[,2]
+ggplot(plot_df,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=celltype))+
+  geom_point(size=1)+scale_color_manual(values = celltype_color$V2,breaks = celltype_color$V1)+
+  theme_void()+theme(text = element_text(size=16))+theme(legend.position = "none")+ggtitle('all_sample')
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/KO fig/all sample embedding celltype.pdf',
+       width = 10,height = 8)
+plot_df_ko = plot_df[plot_df$Batch=='NX3',]
+ggplot(plot_df_ko,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=celltype))+
+  geom_point(size=1)+scale_color_manual(values = celltype_color$V2,breaks = celltype_color$V1)+
+  theme_void()+theme(text = element_text(size=16))+theme(legend.position = "none")+ggtitle('wildtype')
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/KO fig/wildtype embedding celltype.pdf',
+       width = 10,height = 8)
+plot_df_ko = plot_df[plot_df$Batch!='NX3',]
+ggplot(plot_df_ko,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=celltype))+
+  geom_point(size=1)+scale_color_manual(values = celltype_color$V2,breaks = celltype_color$V1)+
+  theme_void()+theme(text = element_text(size=16))+theme(legend.position = "none")+ggtitle('KO')
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/KO fig/KO embedding celltype.pdf',
+       width = 10,height = 8)
+```
+```{r}
+celltype_sample_fraction <- function(scvi_meta,sample='orig.ident',
+                                     celltype='celltype',col1=NULL,break1=NULL){
+  library(BuenColors)
+  library(ggplot2)
+  library(Seurat)
+  ct_freq_list = list()
+  for (i in unique(scvi_meta[,sample])) {
+    print(i)
+    meta_use = scvi_meta[scvi_meta[,sample]==i,]
+    df1 = as.data.frame(table(meta_use[,celltype]))
+    colnames(df1) = c('celltype','number')
+    df1$sample = i
+    df1$number = (df1$number/sum(df1$number))*100
+    ct_freq_list[[i]] = df1
+  }
+  
+  ct_freq_df = do.call(bind_rows,ct_freq_list)
+  ct_freq_df = ct_freq_df[,c(1,3,2)]
+  ct_freq_df2 = reshape2::dcast(ct_freq_df,formula = celltype~sample)
+  if (is.null(col1)) {
+    col1 = jdb_palette('corona')
+  }
+  if (is.null(break1)) {
+    p1 = ggplot(ct_freq_df,aes(x=sample,y=number,fill=celltype))+geom_col() + theme_classic() +
+      scale_fill_manual(values = col1)+
+      guides(color = guide_legend(override.aes = list(size = 4)))+theme(text=element_text(size=15))+
+      xlab('')+scale_y_continuous(expand = c(0,0))+ylab('ratio(%)')+
+      theme(axis.text.x = element_text(vjust = 0.5, hjust = 0.5,
+                                       angle = 35))
+  }else{
+    p1 = ggplot(ct_freq_df,aes(x=sample,y=number,fill=celltype))+geom_col() + theme_classic() +
+      scale_fill_manual(values = col1,breaks = break1)+
+      guides(color = guide_legend(override.aes = list(size = 4)))+theme(text=element_text(size=15))+
+      xlab('')+scale_y_continuous(expand = c(0,0))+ylab('ratio(%)')+
+      theme(axis.text.x = element_text(vjust = 0.5, hjust = 0.5,
+                                       angle = 35))
+  }
+  
+  print(p1)
+  return(ct_freq_df2)
+}
+ct_order = intersect(celltype_color$V1,obj$celltype)
+ct_order = ct_order[c(1:9,11,13:21,23:32,12,10,22)]
+obj$ct_order = factor(obj$celltype,levels = ct_order)
+celltype_color = celltype_color[celltype_color$V1 %in% ct_order,]
+df1=celltype_sample_fraction(obj@meta.data,sample = 'Batch',col1 = celltype_color$V2[c(1:9,11,13:21,23:32,12,10,22)],
+                         break1 = celltype_color$V1[c(1:9,11,13:21,23:32,12,10,22)],celltype = 'ct_order')
+```

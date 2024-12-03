@@ -29,7 +29,11 @@ ggplot(metadata,aes(x=umap1,y=umap2,color=celltype))+geom_point(size=0.1)+
   theme_void()+theme(text = element_text(size=15))+theme(legend.position = "none")
 ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/all_embedding_no_legend/fig2/fig2_celltype.pdf',
        width = 10,height = 8)
-
+ggplot(metadata,aes(x=umap1,y=umap2,color=neuron_only))+geom_point(size=0.1)+
+  scale_color_manual(values=celltype_color$V2,breaks = celltype_color$V1)+
+  theme_void()+theme(text = element_text(size=15))+theme(legend.position = "none")
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/all_embedding_no_legend/fig2/fig2_neuron_only.pdf',
+       width = 10,height = 8)
 germ_col = c('#98DF8AFF',
              '#DBDB8DFF',
              '#AEC7E8FF',

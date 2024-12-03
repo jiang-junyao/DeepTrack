@@ -14,6 +14,8 @@ Here is the script to generate figures in Figure 3 and related supplementary fig
 ```{r, message=FALSE,warning=FALSE}
 library(tidyverse)
 library(ggpubr)
+library(Hmisc)
+library(corrplot)
 library(Seurat)
 library(BuenColors)
 source('/data/jiangjunyao/polyATAC/github_script/help_function/figure3_help_function.R')
@@ -25,10 +27,11 @@ group_df_20241115 = read.csv('/data/jiangjunyao/polyATAC/nmp_final/nmp_pseudotim
 Color1 <- c(rgb(72 / 255, 85 / 255, 167 / 255), rgb(255 / 255, 255 / 255, 255 / 255),
             rgb(239 / 255, 58 / 255, 37 / 255))
 fate_col = c('#4DB6AC',
-             '#0D47A1','#1B5E20','#9ECAE1','#C5E1A5')
-names(fate_col) = c('Balance','Paraxial mesoderm','Spinal cord',"Paraxial_mesoderm_bias","Spinal_cord_bias")
+             '#0D47A1','#1B5E20','#9ECAE1','#C5E1A5','#D3D3D3')
+names(fate_col) = c('Balance','Paraxial mesoderm','Spinal cord',"Paraxial_mesoderm_bias","Spinal_cord_bias",'other')
 ct_col = c('#0D47A1','#1B5E20','#4DB6AC')
 names(ct_col) = c('Paraxial mesoderm','Spinal cord','Neuromesodermal progenitors')
+
 ```
 
 ## Plot NMP differentiation trajectory
@@ -62,10 +65,21 @@ ggplot(plot_df,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=pm_score))+
   theme_void()+theme(text = element_text(size=16))+theme(legend.position = "none")
 ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/all_embedding_no_legend/fig3/NMP diffusion map embedding paraxial mesoderm bias score.pdf',
        width = 10,height = 8)
+plot_df = obj@meta.data
+plot_df$DiffusionMap_1 = obj@reductions$diffmap@cell.embeddings[,1]
+plot_df$DiffusionMap_2 = obj@reductions$diffmap@cell.embeddings[,2]
+plot_df_fate = plot_df[!plot_df$celltype %in% c('Spinal cord','Paraxial mesoderm'),]
+plot_df_downstream = plot_df[plot_df$celltype %in% c('Spinal cord','Paraxial mesoderm'),]
+plot_df_downstream$celltype ='other'
+ggplot(plot_df_downstream,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=celltype))+
+  geom_point(size=1.2)+scale_color_manual(values = fate_col)+geom_point(data = plot_df_fate)+
+  theme_void()+theme(text = element_text(size=16))+theme(legend.position = "none")
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/all_embedding_no_legend/fig3/NMP diffusion map embedding only fate.pdf',
+       width = 10,height = 8)
 ```
 
 ## Plot gene modules
-```r
+```{r}
 for (i in unique(group_df_20241115$module)) {
   gene_use = group_df_20241115[group_df_20241115$module==i,1]
   mt1 = as.matrix(obj@assays$RNA@data[gene_use,])
@@ -77,11 +91,11 @@ for (i in unique(group_df_20241115$module)) {
     theme(text = element_text(size=16))+ggtitle(i)+guides(color = "none")
   ggsave(paste0('/data/jiangjunyao/polyATAC/polyatac_figure/single cell fig/NMP_fate_analysis/module_average_expression/diffusionmap embedding_',i,'.pdf'),
          width = 10,height = 8)
-  ggplot(embed,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=expression))+geom_point(size=1.2)+
+  print(ggplot(embed,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=expression))+geom_point(size=1.2)+
     scale_color_gradientn(colors = jdb_palette("brewer_celsius"))+theme_void()+
-    theme(text = element_text(size=16))+ggtitle(i)+guides(color = "none")
-  ggsave(paste0('/data/jiangjunyao/polyATAC/polyatac_figure/single cell fig/NMP_fate_analysis/module_average_expression/diffusionmap embedding_',i,'_nolenged.pdf'),
-         width = 10,height = 8)
+    theme(text = element_text(size=16))+ggtitle(i))
+  # ggsave(paste0('/data/jiangjunyao/polyATAC/polyatac_figure/single cell fig/NMP_fate_analysis/module_average_expression/diffusionmap embedding_',i,'_nolenged.pdf'),
+  #        width = 10,height = 8)
   df_exp = data.frame(c(colMeans(pm_smooth[[2]][gene_use,]),
                         colMeans(sp_smooth[[2]][gene_use,])),
                       c(1:100,1:100),
@@ -91,11 +105,38 @@ for (i in unique(group_df_20241115$module)) {
     theme_classic()+theme(text = element_text(size=16),plot.title = element_text(hjust = 0.5))+
     scale_color_manual(values = c('#6950a1','#84bf96'))+ggtitle(i)+
     ylab('Scaled expression')+scale_y_continuous(limits = c(0, 2))
-  ggsave(paste0('/data/jiangjunyao/polyATAC/polyatac_figure/single cell fig/NMP_fate_analysis/module_average_expression/lineplot_',i,'.pdf'),
-         width = 10,height = 8)
+  # ggsave(paste0('/data/jiangjunyao/polyATAC/polyatac_figure/single cell fig/NMP_fate_analysis/module_average_expression/lineplot_',i,'.pdf'),
+  #        width = 10,height = 8)
 }
 ```
+### inter-module level co-expression
+```{r}
+dual_lineage2 = cbind(pm_smooth[[1]][group_df_20241115[,1],100:1],
+                     sp_smooth[[1]][group_df_20241115[,1],])
+list_aver = list()
+for (i in unique(group_df_20241115$module)){
+  gene_use = group_df_20241115[group_df_20241115$module==i,1]
+  mt1 = as.matrix(dual_lineage2[gene_use,])
+  list_aver[[i]] = colMeans(mt1)
+}
+module_expression = do.call(bind_cols,list_aver[-1])
+result <- rcorr(as.matrix(module_expression))
+correlation_matrix <- result$r
+adjusted_pvalues <- p.adjust(result$P, method = "fdr")
 
+adjusted_pvalue_matrix <- matrix(adjusted_pvalues, nrow = nrow(correlation_matrix), ncol = ncol(correlation_matrix))
+colnames(adjusted_pvalue_matrix) = colnames(correlation_matrix)
+rownames(adjusted_pvalue_matrix) = rownames(correlation_matrix)
+adjusted_pvalue_matrix[is.na(adjusted_pvalue_matrix)] = 0
+col <- colorRampPalette(c('#2166AC', '#4393C3','#92C5DE', '#D1E5F0', '#F7F7F7', '#FDDBC7', '#F4A582', '#D6604D', '#B2182B'))(100)
+corrplot(correlation_matrix, 
+         method = "circle",
+         type = "upper", 
+         p.mat = adjusted_pvalue_matrix,
+         sig.level = 0.01,insig = "blank",
+         pch.cex = 0.8,tl.col = "black",col = col)
+print(adjusted_pvalue_matrix)
+```
 ### Plot single gene expression along trajectory
 ```r
 for (i in group_df_20241115$X ) {
