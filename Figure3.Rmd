@@ -14,6 +14,7 @@ Here is the script to generate figures in Figure 3 and related supplementary fig
 ```{r, message=FALSE,warning=FALSE}
 library(tidyverse)
 library(ggpubr)
+library(pheatmap)
 library(Hmisc)
 library(corrplot)
 library(Seurat)
@@ -94,8 +95,8 @@ for (i in unique(group_df_20241115$module)) {
   print(ggplot(embed,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=expression))+geom_point(size=1.2)+
     scale_color_gradientn(colors = jdb_palette("brewer_celsius"))+theme_void()+
     theme(text = element_text(size=16))+ggtitle(i))
-  # ggsave(paste0('/data/jiangjunyao/polyATAC/polyatac_figure/single cell fig/NMP_fate_analysis/module_average_expression/diffusionmap embedding_',i,'_nolenged.pdf'),
-  #        width = 10,height = 8)
+  ggsave(paste0('/data/jiangjunyao/polyATAC/polyatac_figure/single cell fig/NMP_fate_analysis/module_average_expression/diffusionmap embedding_',i,'.pdf'),
+         width = 10,height = 8)
   df_exp = data.frame(c(colMeans(pm_smooth[[2]][gene_use,]),
                         colMeans(sp_smooth[[2]][gene_use,])),
                       c(1:100,1:100),
@@ -109,7 +110,9 @@ for (i in unique(group_df_20241115$module)) {
   #        width = 10,height = 8)
 }
 ```
+
 ### inter-module level co-expression
+
 ```{r}
 dual_lineage2 = cbind(pm_smooth[[1]][group_df_20241115[,1],100:1],
                      sp_smooth[[1]][group_df_20241115[,1],])
@@ -136,6 +139,42 @@ corrplot(correlation_matrix,
          sig.level = 0.01,insig = "blank",
          pch.cex = 0.8,tl.col = "black",col = col)
 print(adjusted_pvalue_matrix)
+```
+
+```{r}
+legend_colo = list(module=c('Balance regulate'='#78cdd1',
+                              'late mesoderm regulate'='#33a3dc',
+                              'late neuron regulate'='#77ac98',
+                              'early mesoderm regulate'='#90d7ec',
+                              "early neuron regulate"='#cde6c7'),
+                   celltype=c('Balance NMP'='#4DB6AC',
+                              'Paraxial mesoderm biased NMP'='#9ECAE1',
+                              'Spinal cord biased NMP'='#C5E1A5',
+                              'Paraxial mesoderm'='#0D47A1',
+                              'Spinal cord'='#1B5E20'))
+
+col <- colorRampPalette(as.character(jdb_palette('flame_light')))(100)
+
+dual_lineage2 = cbind(pm_smooth[[1]][group_df_20241115$X,100:1],
+                     sp_smooth[[1]][group_df_20241115$X,])
+no_ba = group_df_20241115[group_df_20241115[,3] != 'Balance regulate',1]
+dual_lineage2 = dual_lineage2[no_ba,]
+anno_row2 = data.frame(group_df_20241115[group_df_20241115[,3] != 'Balance regulate',3])
+colnames(anno_row2) = 'module'
+rownames(anno_row2) = rownames(dual_lineage2)
+pdf('/data/jiangjunyao/polyATAC/polyatac_figure/single cell fig/NMP_fate_analysis/inter module regulation_single gene_col1.pdf',width = 10,height = 8)
+pheatmap(cor(t(dual_lineage2)),cluster_cols = F,cluster_rows = F,
+         show_rownames = F,annotation_row =anno_row2,annotation_col = anno_row2,
+         annotation_colors = legend_colo,show_colnames = F,color = col)
+dev.off()
+
+col <- colorRampPalette(c('#40004B','#762A83','#9970AB','#C2A5CF','#E7D4E8',
+                          '#F7F7F7','#D9F0D3','#A6DBA0','#5AAE61','#1B7837','#00441B'))(100)
+pdf('/data/jiangjunyao/polyATAC/polyatac_figure/single cell fig/NMP_fate_analysis/inter module regulation_single gene_col2.pdf',width = 10,height = 8)
+pheatmap(cor(t(dual_lineage2)),cluster_cols = F,cluster_rows = F,
+         show_rownames = F,annotation_row =anno_row2,annotation_col = anno_row2,
+         annotation_colors = legend_colo,show_colnames = F,color = col)
+dev.off()
 ```
 ### Plot single gene expression along trajectory
 ```r

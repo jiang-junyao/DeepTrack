@@ -1,0 +1,75 @@
+---
+title: "Figure4"
+author: "Jiang junyao"
+
+output: 
+  prettydoc::html_pretty:
+    toc: true
+    theme: cayman
+    highlight: github
+---
+Here is the script to generate figures in Figure 4 and related supplementary figures in the PolyATAC manuscript.
+
+## Load data
+```{r, message=FALSE,warning=FALSE}
+library(tidyverse)
+library(ggpubr)
+library(Hmisc)
+library(corrplot)
+library(Seurat)
+library(BuenColors)
+obj <- readRDS("/data/jiangjunyao/polyATAC/polyATAC_V2_raw.rds")
+celltype_color <- read.csv("~/polyATAC/color_gcy.csv", header=FALSE)
+celltype_color$V2 = gsub(' ','',celltype_color$V2)
+germ_col = c('#98DF8AFF',
+             '#DBDB8DFF',
+             '#AEC7E8FF',
+             '#C5B0D5FF',
+             '#FFBB78FF')
+germ = c('NeuroEctoderm','SurfaceEctoderm','Mesoderm',
+         'Endoderm','Extraembryonic')
+```
+
+## rna embedding plot
+```{r}
+df_plot_rna = as.data.frame(obj@reductions$umap@cell.embeddings)
+df_plot_rna = cbind(df_plot_rna,obj@meta.data)
+ggplot(df_plot_rna,aes(x=UMAP_1,y=UMAP_2,color=ct_leiden))+geom_point(size=0.2)+
+  scale_color_manual(values = celltype_color$V2,breaks = celltype_color$V1)+
+  theme_void()+theme(legend.position = "none")
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/single cell embedding/rna embedding celltype.pdf',width = 10,height = 8)
+ggplot(df_plot_rna,aes(x=UMAP_1,y=UMAP_2,color=germ))+geom_point(size=0.2)+
+  scale_color_manual(values=germ_col,breaks = germ)+
+  theme_void()+theme(legend.position = "none")
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/single cell embedding/rna embedding germ.pdf',width = 10,height = 8)
+plot_time_emb2 <-function(meta,time1,col1='time'){
+  meta$x = obj@reductions$umap@cell.embeddings[,1]
+  meta$y = obj@reductions$umap@cell.embeddings[,2]
+  meta$use_col = meta[,col1]
+  meta_plot1 = meta[meta[,col1]!=time1,]
+  meta_plot1$use_col='ohter'
+  meta_plot2 = meta[meta[,col1]==time1,]
+  meta$use_col = meta
+  ggplot(meta_plot1,aes(x=x,y=y,color=use_col))+geom_point(size=0.2)+
+    scale_color_manual(values = c('grey','#a7324a'))+theme_void()+
+    geom_point(data=meta_plot2,aes(x=x,y=y,color=use_col),size=0.2)+theme(legend.position = "none")
+}
+plot_time_emb2(obj@meta.data,'with barcode','detection')
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/single cell embedding/rna embedding detected barcodes.pdf',
+       width = 10,height = 8)
+```
+
+## atac embedding plot
+```{r}
+df_plot_atac = as.data.frame(obj@reductions$scbasset_umap@cell.embeddings)
+df_plot_atac = cbind(df_plot_atac,obj@meta.data)
+ggplot(df_plot_atac,aes(x=UMAP_1,y=UMAP_2,color=ct_leiden))+geom_point(size=0.2)+
+  scale_color_manual(values = celltype_color$V2,breaks = celltype_color$V1)+
+  theme_void()+theme(legend.position = "none")
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/single cell embedding/atac embedding celltype.pdf',width = 10,height = 8)
+ggplot(df_plot_atac,aes(x=UMAP_1,y=UMAP_2,color=germ))+geom_point(size=0.2)+
+  scale_color_manual(values=germ_col,breaks = germ)+
+  theme_void()+theme(legend.position = "none")
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/single cell embedding/atac embedding germ.pdf',width = 10,height = 8)
+```
+
