@@ -18,6 +18,11 @@ library(Hmisc)
 library(corrplot)
 library(Seurat)
 library(BuenColors)
+library(pheatmap)
+library(ChIPseeker)
+library(TxDb.Mmusculus.UCSC.mm10.knownGene)
+library(org.Mm.eg.db)
+source('/data/jiangjunyao/polyATAC/script/smooth_by_bin.R')
 obj <- readRDS("/data/jiangjunyao/polyATAC/polyATAC_V2_raw.rds")
 celltype_color <- read.csv("~/polyATAC/color_gcy.csv", header=FALSE)
 celltype_color$V2 = gsub(' ','',celltype_color$V2)
@@ -73,3 +78,113 @@ ggplot(df_plot_atac,aes(x=UMAP_1,y=UMAP_2,color=germ))+geom_point(size=0.2)+
 ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/single cell embedding/atac embedding germ.pdf',width = 10,height = 8)
 ```
 
+## NMP differentiaion trajectory in multiomics
+
+load data
+```{r}
+group_df_20241115 <- read.csv("~/polyATAC/nmp_final/nmp_pseudotime_module/only_rna/group_df_20241115.csv", row.names=1)
+pm_pseudotime <- read.csv("~/polyATAC/multiomi/nmp_fate_pseudotime/pm_pseudotime.csv", row.names=1)
+sp_pseudotime <- read.csv("~/polyATAC/multiomi/nmp_fate_pseudotime/sp_pseudotime.csv", row.names=1)
+nmp_multi = readRDS('/data/jiangjunyao/polyATAC/nmp_final/nmp_sp_pm_multiome.rds')
+pm_multi_cell = intersect(rownames(pm_pseudotime),colnames(nmp_multi))
+sp_multi_cell = intersect(rownames(sp_pseudotime),colnames(nmp_multi))
+sp_obj = subset(nmp_multi,cells=sp_multi_cell)
+pm_obj = subset(nmp_multi,cells=pm_multi_cell)
+pm_obj$Pseudotime = pm_obj$scale_pseudotime
+sp_obj$Pseudotime = sp_obj$scale_pseudotime
+em_fea = group_df_20241115[group_df_20241115$module=='early mesoderm regulate',1]
+en_fea = group_df_20241115[group_df_20241115$module=='early neuron regulate',1]
+em_fea = em_fea[em_fea %in% rownames(pm_obj@assays$DORC@data)]
+en_fea = en_fea[en_fea %in% rownames(sp_obj@assays$DORC@data)]
+```
+
+### Plot differentiation trajectory
+```{r}
+Color1 <- c(rgb(72 / 255, 85 / 255, 167 / 255), rgb(255 / 255, 255 / 255, 255 / 255),
+            rgb(239 / 255, 58 / 255, 37 / 255))
+fate_col = c('#4DB6AC',
+             '#0D47A1','#1B5E20','#9ECAE1','#C5E1A5')
+names(fate_col) = c('Balance','Paraxial mesoderm','Spinal cord',"Paraxial_mesoderm_bias","Spinal_cord_bias")
+ct_col = c('#0D47A1','#1B5E20','#4DB6AC')
+names(ct_col) = c('Paraxial mesoderm','Spinal cord','Neuromesodermal progenitors')
+meta_multi = nmp_multi@meta.data
+meta_multi$DiffusionMap_1 = nmp_multi@reductions$diffusionmap@cell.embeddings[,1]
+meta_multi$DiffusionMap_2 = nmp_multi@reductions$diffusionmap@cell.embeddings[,2]
+ggplot(meta_multi,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=celltype))+
+  geom_point(size=2)+scale_color_manual(values = fate_col)+
+  theme_void()+theme(text = element_text(size=16))+theme(legend.position = "none")
+ggplot(meta_multi,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=celltype_ori))+
+  geom_point(size=2)+scale_color_manual(values = ct_col)+
+  theme_void()+theme(text = element_text(size=16))+theme(legend.position = "none")
+ggplot(meta_multi,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=scale_pseudotime))+
+  geom_point(size=2)+scale_color_gradientn(colors = rev(jdb_palette("brewer_marine")))+
+  theme_void()+theme(text = element_text(size=16))+theme(legend.position = "none")
+```
+
+### get smoothed dorc & expression value
+```{r}
+### exp
+pm_smooth_rna = smooth_pseudotime(as.matrix(pm_obj@assays$RNA@data),pm_obj@meta.data,
+                                   em_fea,100,NULL,c('NMP','Paraxial mesoderm'))
+### DORC
+pm_smooth_dorc = smooth_pseudotime(as.matrix(pm_obj@assays$DORC@data),pm_obj@meta.data,
+                                  em_fea,100,NULL,c('NMP','Paraxial mesoderm'))
+```
+
+### DORC change before RNA
+```{r}
+col1 = colorRampPalette(jdb_palette('brewer_marine'))(100)
+dorc_early_c = c('Hoxc6','Epha5','Sall4','Greb1','Tcea3','Hes1','Wnt3a','Hoxc5','Cdx4','Cdx2','Hoxa9','Hoxc8',
+                 'Gm53','Wnt5a','Prickle1','Hoxc9','Cyp26a1')
+pdf('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/dynamics_heatmap/PM_early_RNA.pdf',width = 6,height = 5)
+pheatmap(scale_mt(pm_smooth_rna[[2]][dorc_early_c,]),cluster_rows = F,cluster_cols = F,border_color = NA,
+         color=col1)
+dev.off()
+pdf('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/dynamics_heatmap/PM_early_DORC.pdf',width = 6,height = 5)
+pheatmap(scale_mt(pm_smooth_dorc[[2]][dorc_early_c,]),cluster_rows = F,cluster_cols = F,border_color = NA,
+         color=col1)
+dev.off()
+```
+
+### DORC change after RNA
+```{r}
+dorc_late_c = c('Ccnjl','Hoxc8','Slc2a3','Hoxa3','Ccdc171','Lix1','Fgf8','Myh9','Mcc','T','Evx1os',
+                'Sema6a')
+pdf('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/dynamics_heatmap/PM_late_RNA.pdf',width = 6,height = 5)
+pheatmap(scale_mt(pm_smooth_rna[[2]][dorc_late_c,]),cluster_rows = F,cluster_cols = F,border_color = NA,
+         color=col1)
+dev.off()
+pdf('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/dynamics_heatmap/PM_late_DORC.pdf',width = 6,height = 5)
+pheatmap(scale_mt(pm_smooth_dorc[[2]][dorc_late_c,]),cluster_rows = F,cluster_cols = F,border_color = NA,
+         color=col1)
+dev.off()
+```
+
+### Dynamics for single gene
+```{r,warning=FALSE}
+selected_gene = 'Cdx2'
+df_exp = data.frame(c(scale_vector(pm_smooth_dorc[[2]][selected_gene,]),
+                        scale_vector(pm_smooth_rna[[2]][selected_gene,])),
+                      c(1:100,1:100),
+                      c(rep('Mesoderm lineage DORC',100),
+                        rep('Mesoderm lineage RNA',100)))
+colnames(df_exp) = c('expression','pseudotime','lineage')
+ggplot(df_exp,aes(x=pseudotime,y=expression,color=lineage))+geom_line(size=0.5)+
+  theme_classic()+theme(text = element_text(size=16),plot.title = element_text(hjust = 0.5))+
+  scale_color_manual(values = c('#d71345','#009ad6','#00A651','#c7a252'))+ggtitle(selected_gene)+
+  ylab('Scaled expression')
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/dynamics_heatmap/early_cdx2.pdf',width = 7.5,height = 5)
+selected_gene = 'T'
+df_exp = data.frame(c(scale_vector(pm_smooth_dorc[[2]][selected_gene,]),
+                        scale_vector(pm_smooth_rna[[2]][selected_gene,])),
+                      c(1:100,1:100),
+                      c(rep('Mesoderm lineage DORC',100),
+                        rep('Mesoderm lineage RNA',100)))
+colnames(df_exp) = c('expression','pseudotime','lineage')
+ggplot(df_exp,aes(x=pseudotime,y=expression,color=lineage))+geom_line(size=0.5)+
+  theme_classic()+theme(text = element_text(size=16),plot.title = element_text(hjust = 0.5))+
+  scale_color_manual(values = c('#d71345','#009ad6','#00A651','#c7a252'))+ggtitle(selected_gene)+
+  ylab('Scaled expression')
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/dynamics_heatmap/late_T.pdf',width = 7.5,height = 5)
+
+```
