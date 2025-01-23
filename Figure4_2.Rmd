@@ -1,0 +1,332 @@
+---
+title: "Figure4_part2"
+author: "Jiang junyao"
+
+output: 
+  prettydoc::html_pretty:
+    toc: true
+    theme: cayman
+    highlight: github
+---
+Here is the script to generate figures in Figure 4 (part2) and related supplementary figures in the PolyATAC manuscript.
+```{r, message=FALSE,warning=FALSE}
+library(tidyverse)
+library(ggpubr)
+library(Hmisc)
+library(corrplot)
+library(Seurat)
+library(ArchR)
+library(BuenColors)
+library(pheatmap)
+library(ChIPseeker)
+library(TxDb.Mmusculus.UCSC.mm10.knownGene)
+library(org.Mm.eg.db)
+source('/data/jiangjunyao/polyATAC/script/smooth_by_bin.R')
+proj_nmp = readRDS('/data/jiangjunyao/polyATAC/archr_nmp/Save-ArchR-Project.rds')
+obj <- readRDS("/data/jiangjunyao/polyATAC/nmp_final/only_nmp_multi.rds")
+obj = ScaleData(obj)
+celltype_color <- read.csv("~/polyATAC/color_gcy.csv", header=FALSE)
+celltype_color$V2 = gsub(' ','',celltype_color$V2)
+fate_col = c('#4DB6AC',
+             '#0D47A1','#1B5E20','#9ECAE1','#C5E1A5','#D3D3D3')
+names(fate_col) = c('Balance','Paraxial mesoderm','Spinal cord',"Paraxial_mesoderm_bias","Spinal_cord_bias",'other')
+col1 <- colorRampPalette(jdb_palette('brewer_green'))(100)
+col2 <- colorRampPalette(jdb_palette('brewer_purple'))(100)
+col3 <- colorRampPalette(jdb_palette('brewer_blue'))(100)
+```
+## differential analysis
+
+RNA three
+```{r,warning=FALSE,message=FALSE}
+obj$fate_bias[obj$fate_bias == 'other'] = 'Balance'
+obj1 = subset(obj,fate_bias!='Balance')
+obj@active.ident = as.factor(obj$fate_bias)
+DefaultAssay(obj) = 'RNA'
+obj = NormalizeData(obj)
+deg = FindAllMarkers(obj)
+deg = deg[deg$avg_log2FC>0.5,]
+deg = deg[deg$p_val_adj<0.05,]
+aver_exp = AverageExpression(obj,assays = 'RNA',slot = 'scale.data')[['RNA']]
+aver_exp = aver_exp[deg$gene,]
+pdf('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/differential analysis/deg_three.pdf',width = 6,height = 5)
+pheatmap(aver_exp,cluster_rows = F,cluster_cols = F,color=col1,show_rownames = F,
+         show_colnames = T,cellwidth = 50)
+dev.off()
+
+```
+
+RNA two
+```{r,warning=FALSE,message=FALSE}
+obj1 = subset(obj,fate_bias!='Balance')
+DefaultAssay(obj1) = 'RNA'
+deg2 = FindAllMarkers(obj1)
+deg2 = deg2[deg2$avg_log2FC>0.5,]
+deg2 = deg2[deg2$p_val_adj<0.05,]
+aver_exp = AverageExpression(obj1,assays = 'RNA',slot = 'scale.data')[['RNA']]
+aver_exp = aver_exp[deg2$gene,]
+pdf('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/differential analysis/deg_two.pdf',width = 6,height = 5)
+pheatmap(aver_exp,cluster_rows = F,cluster_cols = F,color=col1,show_rownames = F,
+         show_colnames = T,cellwidth = 50)
+dev.off()
+```
+
+TF activity three
+```{r,warning=FALSE,message=FALSE}
+DefaultAssay(obj) = 'TFActivity_NMP'
+tfa = FindAllMarkers(obj)
+tfa = tfa[tfa$avg_log2FC>0.5,]
+tfa = tfa[tfa$p_val_adj<0.05,]
+obj = ScaleData(obj)
+aver_tfa = AverageExpression(obj,assays = 'TFActivity_NMP',slot = 'scale.data')[['TFActivity_NMP']]
+aver_tfa = aver_tfa[tfa$gene,]
+pdf('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/differential analysis/differential_tfa_three.pdf',width = 6,height = 5)
+pheatmap(aver_tfa,cluster_rows = F,cluster_cols = F,color=col2,show_rownames = F,cellwidth = 50)
+dev.off()
+```
+
+
+TF activity three
+```{r,warning=FALSE,message=FALSE}
+DefaultAssay(obj1) = 'TFActivity_NMP'
+tfa2 = FindAllMarkers(obj1,min.pct = 0)
+tfa2 = tfa2[tfa2$avg_log2FC>0.5,]
+tfa2 = tfa2[tfa2$p_val_adj<0.05,]
+obj1 = ScaleData(obj1)
+aver_tfa2 = AverageExpression(obj1,assays = 'TFActivity_NMP',slot = 'scale.data')[['TFActivity_NMP']]
+aver_tfa2 = aver_tfa2[tfa2$gene,]
+pdf('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/differential analysis/differential_tfa_two.pdf',width = 6,height = 5)
+pheatmap(aver_tfa2,cluster_rows = F,cluster_cols = F,color=col2,show_rownames = F,cellwidth = 50)
+dev.off()
+
+```
+
+
+DAR three
+```{r,warning=FALSE,message=FALSE}
+markersPeaks2 <- getMarkerFeatures(
+  ArchRProj = proj_nmp, 
+  useMatrix = "PeakMatrix", 
+  groupBy = "fate_bias",
+  bias = c("TSSEnrichment", "log10(nFrags)"),
+  testMethod = "wilcoxon"
+)
+markerList2 <- getMarkers(markersPeaks2, cutOff = "Pval <= 0.01 & Log2FC >= 2")
+dar2=plotMarkerHeatmap(
+  seMarker = markersPeaks2, 
+  cutOff = "Pval <= 0.01 & Log2FC >= 2",
+  transpose = F,plotLog2FC = TRUE,clusterCols=F,nPrint=5,nLabel = 5,
+  pal=paletteContinuous(set = "solarExtra", n = 5, reverse = FALSE),returnMatrix = T
+  
+)
+reference_GRange = GRanges(rownames(dar2))
+peakAnno <- annotatePeak(reference_GRange,
+                         tssRegion = c(-3000, 3000),
+                         TxDb = TxDb.Mmusculus.UCSC.mm10.knownGene, annoDb = "org.Mm.eg.db"
+)
+dar2=as.data.frame(dar2)
+dar2$region = peakAnno@anno$annotation
+dar2$related_gene = peakAnno@anno$SYMBOL
+pdf('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/differential analysis/differential_dar_three.pdf',width = 6,height = 5)
+print(pheatmap(dar2[,1:3],cluster_rows = F,cluster_cols = F,color=col3,show_rownames = F,cellwidth = 50))
+dev.off()
+
+```
+
+DAR two
+```{r,warning=FALSE,message=FALSE}
+proj_two = readRDS('/data/jiangjunyao/polyATAC/multiomi/archr_two_bias//Save-ArchR-Project.rds')
+markersPeaks <- getMarkerFeatures(
+  ArchRProj = proj_two, 
+  useMatrix = "PeakMatrix", 
+  groupBy = "fate_bias",
+  bias = c("TSSEnrichment", "log10(nFrags)"),
+  testMethod = "wilcoxon"
+)
+markerList <- getMarkers(markersPeaks, cutOff = "Pval <= 0.01 & Log2FC >= 2")
+# 
+
+dar=plotMarkerHeatmap(
+  seMarker = markersPeaks, 
+  cutOff = "Pval <= 0.01 & Log2FC >= 2",
+  transpose = F,plotLog2FC = TRUE,clusterCols=F,nPrint=5,nLabel = 5,
+  pal=paletteContinuous(set = "solarExtra", n = 5, reverse = FALSE),returnMatrix = T
+  
+)
+reference_GRange = GRanges(rownames(dar))
+peakAnno <- annotatePeak(reference_GRange,
+                         tssRegion = c(-3000, 3000),
+                         TxDb = TxDb.Mmusculus.UCSC.mm10.knownGene, annoDb = "org.Mm.eg.db"
+)
+dar=as.data.frame(dar)
+dar$region = peakAnno@anno$annotation
+dar$related_gene = peakAnno@anno$SYMBOL
+pdf('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/differential analysis/differential_dar_two.pdf',width = 10,height = 8)
+print(pheatmap(dar[,1:2],cluster_rows = F,cluster_cols = F,color=col3,show_rownames = F,cellwidth = 50))
+dev.off()
+```
+### out list
+```r
+markerList$Paraxial_mesoderm_bias$group = 'pm-nmp'
+markerList$Spinal_cord_bias$group = 'sp-nmp'
+markerList2$Paraxial_mesoderm_bias$group = 'pm-nmp'
+markerList2$Spinal_cord_bias$group = 'sp-nmp'
+markerList2$other$group = 'balance'
+dar_three = as.data.frame(rbind(markerList2$other,markerList2$Paraxial_mesoderm_bias,markerList2$Spinal_cord_bias))
+dar_two = as.data.frame(rbind(markerList$Paraxial_mesoderm_bias,markerList$Spinal_cord_bias))
+dar_three$gene = dar2$related_gene
+dar_two$gene = dar$related_gene
+write.csv(dar_three,'/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/differential analysis/nmp_dar_three_fate.csv')
+write.csv(dar_two,'/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/differential analysis/nmp_dar_two_fate.csv')
+write.csv(deg,'/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/differential analysis/nmp_deg_three_fate.csv')
+write.csv(deg2,'/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/differential analysis/nmp_deg_two_fate.csv')
+write.csv(tfa,'/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/differential analysis/nmp_differential_TF_activity_three_fate.csv')
+write.csv(tfa2,'/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/differential analysis/nmp_differential_TF_activity_two_fate.csv')
+```
+
+### fate bias violin (RNA)
+```{r,warning=FALSE,message=FALSE}
+VlnPlot(obj,assay = 'RNA','Cdx2',pt.size = 0)+scale_fill_manual(values = fate_col)
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/differential analysis/Cdx2_RNA_three_fate_violin.pdf',
+       width = 10,height = 8)
+VlnPlot(obj1,assay = 'RNA','Cdx2',pt.size = 0)+scale_fill_manual(values = fate_col)
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/differential analysis/Cdx2_RNA_two_fate_violin.pdf',
+       width = 10,height = 8)
+VlnPlot(obj,assay = 'RNA','T',pt.size = 0)+scale_fill_manual(values = fate_col)
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/differential analysis/T_RNA_three_fate_violin.pdf',
+       width = 10,height = 8)
+VlnPlot(obj1,assay = 'RNA','T',pt.size = 0)+scale_fill_manual(values = fate_col)
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/differential analysis/T_RNA_two_fate_violin.pdf',
+       width = 10,height = 8)
+VlnPlot(obj,assay = 'RNA','Meis1',pt.size = 0)+scale_fill_manual(values = fate_col)
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/differential analysis/Meis1_RNA_three_fate_violin.pdf',
+       width = 10,height = 8)
+VlnPlot(obj1,assay = 'RNA','Meis1',pt.size = 0)+scale_fill_manual(values = fate_col)
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/differential analysis/Meis1_RNA_two_fate_violin.pdf',
+       width = 10,height = 8)
+```
+### fate bias violin (TF activity)
+```{r,warning=FALSE,message=FALSE}
+DefaultAssay(obj) = 'TFActivity_NMP'
+DefaultAssay(obj1) = 'TFActivity_NMP'
+VlnPlot(obj,assay = 'TFActivity_NMP','Cdx2-473',pt.size = 0,slot = 'data')+scale_fill_manual(values = fate_col)
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/differential analysis/Cdx2_tfa_three_fate_violin.pdf',
+       width = 10,height = 8)
+VlnPlot(obj1,assay = 'TFActivity_NMP','Cdx2-473',pt.size = 0,slot = 'data')+scale_fill_manual(values = fate_col)
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/differential analysis/Cdx2_tfa_two_fate_violin.pdf',
+       width = 10,height = 8)
+VlnPlot(obj,assay = 'TFActivity_NMP','T-771',pt.size = 0)+scale_fill_manual(values = fate_col)
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/differential analysis/T_tfa_three_fate_violin.pdf',
+       width = 10,height = 8)
+VlnPlot(obj1,assay = 'TFActivity_NMP','T-771',pt.size = 0)+scale_fill_manual(values = fate_col)
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/differential analysis/T_tfa_two_fate_violin.pdf',
+       width = 10,height = 8)
+VlnPlot(obj,assay = 'TFActivity_NMP','Meis1-425',pt.size = 0)+scale_fill_manual(values = fate_col)
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/differential analysis/Meis1_tfa_three_fate_violin.pdf',
+       width = 10,height = 8)
+VlnPlot(obj1,assay = 'TFActivity_NMP','Meis1-425',pt.size = 0)+scale_fill_manual(values = fate_col)
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/differential analysis/Meis1_tfa_two_fate_violin.pdf',
+       width = 10,height = 8)
+```
+### grn analysis
+```{r}
+pm_bias_grn <- read.csv("~/polyATAC/nmp_final/celloracle_grn/pm_bias_grn_merge_p2g.csv", row.names=1)
+pm_bias_grn = pm_bias_grn[!is.na(pm_bias_grn$p),]
+sp_bias_grn <- read.csv("~/polyATAC/nmp_final/celloracle_grn/sp_bias_grn_merge_p2g.csv", row.names=1)
+sp_bias_grn = sp_bias_grn[!is.na(sp_bias_grn$p),]
+pm_bias_grn = pm_bias_grn[pm_bias_grn$p<0.001,]
+sp_bias_grn = sp_bias_grn[sp_bias_grn$p<0.001,]
+pm_bias_grn = pm_bias_grn[order(pm_bias_grn$coef_abs,decreasing = T),]
+sp_bias_grn = sp_bias_grn[order(sp_bias_grn$coef_abs,decreasing = T),]
+pm_bias_grn_use = pm_bias_grn[1:2000,]
+sp_bias_grn_use = sp_bias_grn[1:2000,]
+pm_cdx2 <- read.delim("~/polyATAC/nmp_final/celloracle_grn/filtered_grn/pm_cdx2.txt")
+sp_meis1 <- read.delim("~/polyATAC/nmp_final/celloracle_grn/filtered_grn/sp_meis1.txt")
+target_list = list('cdx2_target'=pm_cdx2$target,'meis1_target'=sp_meis1$target,
+                   'cdx2_repress'=pm_cdx2[pm_cdx2$regulation_type=='repress','target'],
+                   'cdx2_activate'=pm_cdx2[pm_cdx2$regulation_type=='activate','target'],
+                   'meis1_repress'=sp_meis1[sp_meis1$regulation_type=='repress','target'],
+                   'meis1_activate'=sp_meis1[sp_meis1$regulation_type=='activate','target'])
+DefaultAssay(obj) = 'RNA'
+
+obj = AddModuleScore(obj,features = target_list,name = c('cdx2_target','meis1_target',
+                                                         'cdx2_repress','cdx2_activate',
+                                                         'meis1_repress','meis1_activate'))
+```
+
+```{r}
+VlnPlot(obj,'cdx2_target1',pt.size = 0)+scale_fill_manual(values = fate_col)+ggtitle('cdx2_target_all')
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/differential analysis/Cdx2_target_gene_all_violin.pdf',
+       width = 10,height = 8)
+VlnPlot(obj,'meis1_target2',pt.size = 0)+scale_fill_manual(values = fate_col)+ggtitle('meis1_target_all')
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/differential analysis/Meis1_target_gene_all_violin.pdf',
+       width = 10,height = 8)
+VlnPlot(obj,'cdx2_repress3',pt.size = 0)+scale_fill_manual(values = fate_col)+ggtitle('cdx2_repress')
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/differential analysis/Cdx2_target_gene_repress_violin.pdf',
+       width = 10,height = 8)
+VlnPlot(obj,'cdx2_activate4',pt.size = 0)+scale_fill_manual(values = fate_col)+ggtitle('cdx2_activate')
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/differential analysis/Cdx2_target_gene_activate_violin.pdf',
+       width = 10,height = 8)
+VlnPlot(obj,'meis1_repress5',pt.size = 0)+scale_fill_manual(values = fate_col)+ggtitle('meis1_repress')
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/differential analysis/Meis1_target_gene_repress_violin.pdf',
+       width = 10,height = 8)
+VlnPlot(obj,'meis1_activate6',pt.size = 0)+scale_fill_manual(values = fate_col)+ggtitle('meis1_activate')
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/differential analysis/Meis1_target_gene_activate_violin.pdf',
+       width = 10,height = 8)
+```
+
+### 
+```{r}
+Cdx2_source = pm_bias_grn_use[pm_bias_grn_use$target=='Cdx2',]
+Meis1_source = sp_bias_grn_use[sp_bias_grn_use$target=='Meis1',]
+```
+
+
+```{r}
+library(org.Mm.eg.db)
+gene_enrich <- function(gene,org.db,enrich.db,use_internal_data = TRUE,
+                        organism = NULL,pvalueCutoff = 0.05){
+  library(clusterProfiler)
+  gene1 <- clusterProfiler::bitr(gene, fromType = "SYMBOL",
+                                 toType = c("SYMBOL", "ENTREZID"),
+                                 OrgDb = org.db)
+  if (enrich.db =='KEGG') {
+    k1 <- clusterProfiler::enrichKEGG(gene = gene1$ENTREZID,
+                                      pvalueCutoff = pvalueCutoff
+                                      ,use_internal_data = use_internal_data,
+                                      minGSSize = 2)
+  }else if(enrich.db =='GO'){
+    k1 = clusterProfiler::enrichGO(gene = gene1$ENTREZID,
+                                   OrgDb = org.db,
+                                   keyType = "ENTREZID",
+                                   ont = "BP",
+                                   pvalueCutoff = pvalueCutoff,minGSSize = 2)
+  }
+  return(k1)
+}
+pm_nmp_deg = gene_enrich(deg2[deg2$cluster=='Paraxial_mesoderm_bias','gene'],
+                         org.Mm.eg.db,'GO')
+pm_nmp_deg = setReadable(pm_nmp_deg,org.Mm.eg.db)
+sc_nmp_deg = gene_enrich(deg2[deg2$cluster!='Paraxial_mesoderm_bias','gene'],
+                         org.Mm.eg.db,'GO')
+sc_nmp_deg = setReadable(sc_nmp_deg,org.Mm.eg.db)
+
+motif_pm = tfa2[tfa2$cluster=='Paraxial_mesoderm_bias','gene']
+pm_nmp_tfa = gene_enrich(str_split(motif_pm,'-',simplify = T)[,1],
+                         org.Mm.eg.db,'GO')
+pm_nmp_tfa = setReadable(pm_nmp_tfa,org.Mm.eg.db)
+motif_sc = tfa2[tfa2$cluster!='Paraxial_mesoderm_bias','gene']
+sc_nmp_tfa = gene_enrich(str_split(motif_sc,'-',simplify = T)[,1],
+                         org.Mm.eg.db,'GO')
+sc_nmp_tfa = setReadable(sc_nmp_tfa,org.Mm.eg.db)
+
+pm_nmp_dar = gene_enrich(dar[dar$Paraxial_mesoderm_bias>0,'related_gene'],
+                         org.Mm.eg.db,'GO')
+pm_nmp_dar = setReadable(pm_nmp_dar,org.Mm.eg.db)
+
+sc_nmp_dar = gene_enrich(dar[dar$Paraxial_mesoderm_bias<0,'related_gene'],
+                         org.Mm.eg.db,'GO')
+sc_nmp_dar = setReadable(sc_nmp_dar,org.Mm.eg.db)
+```
+
+
+

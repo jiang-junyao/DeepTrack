@@ -1,0 +1,131 @@
+---
+title: "Figure2_spatial"
+author: "Jiang junyao"
+
+output: 
+  prettydoc::html_pretty:
+    toc: true
+    theme: cayman
+    highlight: github
+---
+
+### load data
+```{r,message=FALSE}
+library(Seurat)
+library(tidyverse)
+library(reshape2)
+library(BuenColors)
+obj = readRDS("~/polyATAC/E9_10 visium/analyzed_10x.rds")
+e95_spot = colnames(obj)[obj@reductions$spatial@cell.embeddings[,1]>40 & obj@reductions$spatial@cell.embeddings[,2]>50]
+e95_10x = subset(obj,cells = e95_spot)
+e105_spot = colnames(obj)[obj@reductions$spatial@cell.embeddings[,1]<40 & obj@reductions$spatial@cell.embeddings[,2]>10]
+e105_10x = subset(obj,cells = e105_spot)
+```
+
+### deconvolution weight
+```{r,message=FALSE}
+cns_ct = c("Spinal cord","Neuromesodermal progenitors","Posterior floor plate",
+           "Hindbrain","Anterior floor plate","Di telencephalon","Mesencephalon MHB",
+           "Retinal primordium")
+col1 = c(rgb(218/255,218/255,218/255),
+         rgb(185/255,138/255,133/255),
+         rgb(106/255,12/255,21/255))
+for (i in cns_ct) {
+  FeaturePlot(e95_10x,i,reduction = 'spatial',pt.size=4.5)+theme_void()+theme(
+    plot.title = element_text(hjust = 0.5),
+    text = element_text(size=16)
+  )+scale_color_gradientn(colors = col1)
+  ggsave(paste0('/data/jiangjunyao/polyATAC/polyatac_figure/spatial fig/deconvolution/E9_',
+                i,'.pdf'),width = 10,height = 8)
+  FeaturePlot(e105_10x,i,reduction = 'spatial',pt.size=3)+theme_void()+theme(
+    plot.title = element_text(hjust = 0.5),
+    text = element_text(size=16)
+  )+scale_color_gradientn(colors = col1)
+  ggsave(paste0('/data/jiangjunyao/polyATAC/polyatac_figure/spatial fig/deconvolution/E10_',
+                i,'.pdf'),width = 10,height = 8)
+}
+
+```
+
+### preprocess clone data
+```{r,warning=FALSE,message=FALSE}
+polylox = read.csv("~/polyATAC/E9_10 visium/polylox/polylox_final_result.csv")
+spatial_pgen <- read.delim("~/polyATAC/E9_10 visium/polylox/spatial_pgen")
+barcode_use = spatial_pgen[spatial_pgen$pgen<0.001,1]
+clone_mt = dcast(polylox,polylox~barcode_seq)
+clone_mt[clone_mt==1]=0
+rownames(clone_mt) = clone_mt[,1]
+clone_mt = clone_mt[barcode_use,]
+clone_mt = clone_mt[,-1]
+clone_mt = clone_mt[rowSums(clone_mt)>0,]
+e9_clone_mt = clone_mt[,intersect(colnames(clone_mt),colnames(e95_10x))]
+e9_clone_mt = e9_clone_mt[rowSums(e9_clone_mt)>0,]
+e10_clone_mt = clone_mt[,intersect(colnames(clone_mt),colnames(e105_10x))]
+e10_clone_mt = e10_clone_mt[rowSums(e10_clone_mt)>0,]
+```
+
+### spatial clone disturbution
+```{r}
+clone_embedding <- function(barcode_use,meta,coor,mode='single',barcode_key='barcodes',
+                            colors=jdb_palette('corona')[-8],bg_size=1.5,barcode_size=4,
+                            ct_key='celltype'){
+  coor = as.data.frame(coor)
+  barcode_anno = rep('other',nrow(meta))
+  idx <- which(meta[,barcode_key] %in% barcode_use)
+  barcode_anno[idx] <- meta[idx,barcode_key]
+  coor$barcode_type = barcode_anno
+  colnames(coor)[1:2] = c('X','Y')
+  coor$barcode_type = barcode_anno
+  coor1 = coor[coor$barcode_type %in% c('other'),]
+  coor1$barcode_type = NA
+  coor1$border=NA
+  coor2 = coor[!coor$barcode_type %in% c('other'),]
+  coor2$border='with barcode'
+  if (mode=='single') {
+    coor2$barcode_type = meta[rownames(coor2),ct_key]
+  }
+  
+  p1=ggplot(coor1,aes(x=X,y=Y,fill=barcode_type,color=border))+geom_point(data=coor1,size=bg_size,shape=21)+
+    geom_point(data=coor2,aes(x=X,y=Y),shape=21,size=barcode_size)+theme_void()+
+    scale_color_manual(values = 'black', na.value = rgb(215/255,215/255,215/255))+
+    theme(text = element_text(size=16))+
+    scale_fill_manual(values = colors, na.value = rgb(215/255,215/255,215/255))+
+    guides(color="none")+theme(legend.position = "none")
+  return(p1)
+}
+for (i in 1:nrow(e9_clone_mt)) {
+  e95_10x$barcodes = 'no'
+  e95_10x@meta.data = e95_10x@meta.data[colnames(e95_10x),]
+  spot_idx = colnames(e9_clone_mt)[which(e9_clone_mt[i,]!=0)]
+  if (length(spot_idx)>1) {
+      e95_10x@meta.data[spot_idx,'barcodes'] = rownames(e9_clone_mt)[i]
+      id1 = paste(rownames(e9_clone_mt)[i])
+      p1=clone_embedding(rownames(e9_clone_mt)[i],e95_10x@meta.data,
+                      e95_10x@reductions$spatial@cell.embeddings,mode = 'na',
+                      barcode_key = 'barcodes',barcode_size = 6,bg_size=4)+
+        ggtitle(id1)
+      print(p1)
+      ggsave(paste0('/data/jiangjunyao/polyATAC/polyatac_figure/spatial fig/spatial clone/E9_',
+                    id1,'.pdf'),width = 10,height = 8)
+  }
+
+}
+for (i in 1:nrow(e10_clone_mt)) {
+  e105_10x$barcodes = 'no'
+  e105_10x@meta.data = e105_10x@meta.data[colnames(e105_10x),]
+  spot_idx = colnames(e10_clone_mt)[which(e10_clone_mt[i,]!=0)]
+  if (length(spot_idx)>1) {
+    e105_10x@meta.data[spot_idx,'barcodes'] = rownames(e10_clone_mt)[i]
+    id1 = paste(rownames(e10_clone_mt)[i])
+    p1=clone_embedding(rownames(e10_clone_mt)[i],e105_10x@meta.data,
+                    e105_10x@reductions$spatial@cell.embeddings,mode = 'na',
+                    barcode_key = 'barcodes',barcode_size = 6,bg_size=4)+
+      ggtitle(id1)
+    print(p1)
+    ggsave(paste0('/data/jiangjunyao/polyATAC/polyatac_figure/spatial fig/spatial clone/e10_',
+                  id1,'.pdf'),width = 10,height = 8) 
+  }
+}
+```
+
+
