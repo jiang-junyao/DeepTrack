@@ -132,6 +132,18 @@ dev.off()
 
 ```
 
+```{r}
+dar2_final = read.csv('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/nmp_dar_two_fate.csv')
+dar2_final$peak=paste0(dar2_final$seqnames,'-',dar2_final$start,'-',dar2_final$end)
+DefaultAssay(obj1) = 'ATAC'
+obj1@active.ident = as.factor(obj1$fate_bias)
+obj1 = ScaleData(obj1)
+aver_tfa2 = AverageExpression(obj1,assays = 'ATAC',slot = 'scale.data')[['ATAC']]
+aver_tfa2 = aver_tfa2[dar2_final$peak,]
+pdf('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/differential analysis/differential_dar_two.pdf',width = 6,height = 5)
+pheatmap(aver_tfa2,cluster_rows = F,cluster_cols = F,color=col3,show_rownames = F,cellwidth = 50)
+dev.off()
+```
 DAR two
 ```{r,warning=FALSE,message=FALSE}
 proj_two = readRDS('/data/jiangjunyao/polyATAC/multiomi/archr_two_bias//Save-ArchR-Project.rds')

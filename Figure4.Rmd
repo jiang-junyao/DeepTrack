@@ -35,6 +35,29 @@ germ = c('NeuroEctoderm','SurfaceEctoderm','Mesoderm',
          'Endoderm','Extraembryonic')
 ```
 
+## RMA quality
+```{r}
+obj$Batch[obj$Batch =='e95']='mouse1'
+VlnPlot(obj,'nCount_RNA',group.by = 'Batch',pt.size=0)+scale_fill_manual(values = jdb_palette('corona'))
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/cell type statistic and fraction plot/nCount_vioin.pdf',width = 10,height = 8)
+VlnPlot(obj,'nFeature_RNA',group.by = 'Batch',pt.size=0)+scale_fill_manual(values = jdb_palette('corona'))
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/cell type statistic and fraction plot/nFeature_vioin.pdf',width = 10,height = 8)
+print(median(obj$nCount_RNA))
+print(median(obj$nFeature_RNA))
+```
+
+
+```{r}
+```
+## ATAC qualikty
+```{r}
+proj = readRDS('/data/jiangjunyao/polyATAC/multiomi/archr_subset/Save-ArchR-Project.rds')
+obj$TSSEnrichment = proj$TSSEnrichment
+obj$nFrags = proj$nFrags
+VlnPlot(obj,'nFrags',group.by = 'Batch',pt.size=0)+scale_fill_manual(values = jdb_palette('corona'))
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/cell type statistic and fraction plot/nFrag_vioin.pdf',width = 10,height = 8)
+print(median(obj$nFrags))
+```
 ## rna embedding plot
 ```{r}
 df_plot_rna = as.data.frame(obj@reductions$umap@cell.embeddings)
@@ -59,7 +82,9 @@ plot_time_emb2 <-function(meta,time1,col1='time'){
     scale_color_manual(values = c('grey','#a7324a'))+theme_void()+
     geom_point(data=meta_plot2,aes(x=x,y=y,color=use_col),size=0.2)+theme(legend.position = "none")
 }
-plot_time_emb2(obj@meta.data,'with barcode','detection')
+ggplot(df_plot_rna,aes(x=UMAP_1,y=UMAP_2,color=detection))+geom_point(size=0.1)+
+  theme_void()+theme(text = element_text(size=15))+
+  scale_color_manual(values = c('#a7324a','grey'))+NoLegend()
 ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/single cell embedding/rna embedding detected barcodes.pdf',
        width = 10,height = 8)
 ```
@@ -77,114 +102,198 @@ ggplot(df_plot_atac,aes(x=UMAP_1,y=UMAP_2,color=germ))+geom_point(size=0.2)+
   theme_void()+theme(legend.position = "none")
 ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/single cell embedding/atac embedding germ.pdf',width = 10,height = 8)
 ```
-
-## NMP differentiaion trajectory in multiomics
-
-load data
-```{r}
-group_df_20241115 <- read.csv("~/polyATAC/nmp_final/nmp_pseudotime_module/only_rna/group_df_20241115.csv", row.names=1)
-pm_pseudotime <- read.csv("~/polyATAC/multiomi/nmp_fate_pseudotime/pm_pseudotime.csv", row.names=1)
-sp_pseudotime <- read.csv("~/polyATAC/multiomi/nmp_fate_pseudotime/sp_pseudotime.csv", row.names=1)
-nmp_multi = readRDS('/data/jiangjunyao/polyATAC/nmp_final/nmp_sp_pm_multiome.rds')
-pm_multi_cell = intersect(rownames(pm_pseudotime),colnames(nmp_multi))
-sp_multi_cell = intersect(rownames(sp_pseudotime),colnames(nmp_multi))
-sp_obj = subset(nmp_multi,cells=sp_multi_cell)
-pm_obj = subset(nmp_multi,cells=pm_multi_cell)
-pm_obj$Pseudotime = pm_obj$scale_pseudotime
-sp_obj$Pseudotime = sp_obj$scale_pseudotime
-em_fea = group_df_20241115[group_df_20241115$module=='early mesoderm regulate',1]
-en_fea = group_df_20241115[group_df_20241115$module=='early neuron regulate',1]
-em_fea = em_fea[em_fea %in% rownames(pm_obj@assays$DORC@data)]
-en_fea = en_fea[en_fea %in% rownames(sp_obj@assays$DORC@data)]
+```{r,warning=FALSE,message=FALSE}
+multi_meta = obj@meta.data
+multi_meta = multi_meta[!is.na(multi_meta$barcodes),]
+multi_meta = multi_meta[multi_meta$pgen<0.001,]
+multi_meta = multi_meta[,c('germ','barcodes')]
+colnames(multi_meta)[1] = 'celltype' 
+barcode_count = FateMapper::fate_mapping(multi_meta,show_row = F)
+write.csv(barcode_count,'/data/jiangjunyao/polyATAC/multiomi/multi_germ_barcode_count.csv')
 ```
 
-### Plot differentiation trajectory
+## clone embedding
 ```{r}
-Color1 <- c(rgb(72 / 255, 85 / 255, 167 / 255), rgb(255 / 255, 255 / 255, 255 / 255),
-            rgb(239 / 255, 58 / 255, 37 / 255))
-fate_col = c('#4DB6AC',
-             '#0D47A1','#1B5E20','#9ECAE1','#C5E1A5')
-names(fate_col) = c('Balance','Paraxial mesoderm','Spinal cord',"Paraxial_mesoderm_bias","Spinal_cord_bias")
-ct_col = c('#0D47A1','#1B5E20','#4DB6AC')
-names(ct_col) = c('Paraxial mesoderm','Spinal cord','Neuromesodermal progenitors')
-meta_multi = nmp_multi@meta.data
-meta_multi$DiffusionMap_1 = nmp_multi@reductions$diffusionmap@cell.embeddings[,1]
-meta_multi$DiffusionMap_2 = nmp_multi@reductions$diffusionmap@cell.embeddings[,2]
-ggplot(meta_multi,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=celltype))+
-  geom_point(size=2)+scale_color_manual(values = fate_col)+
-  theme_void()+theme(text = element_text(size=16))+theme(legend.position = "none")
-ggplot(meta_multi,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=celltype_ori))+
-  geom_point(size=2)+scale_color_manual(values = ct_col)+
-  theme_void()+theme(text = element_text(size=16))+theme(legend.position = "none")
-ggplot(meta_multi,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=scale_pseudotime))+
-  geom_point(size=2)+scale_color_gradientn(colors = rev(jdb_palette("brewer_marine")))+
-  theme_void()+theme(text = element_text(size=16))+theme(legend.position = "none")
+clone_embedding <- function(barcode_use,meta,coor,mode='single',barcode_key='barcodes',
+                            colors=jdb_palette('corona')[-8],bg_size=1.5,barcode_size=4,
+                            ct_key='celltype'){
+  coor = as.data.frame(coor)
+  barcode_anno = rep('other',nrow(meta))
+  idx <- which(meta[,barcode_key] %in% barcode_use)
+  barcode_anno[idx] <- meta[idx,barcode_key]
+  coor$barcode_type = barcode_anno
+  colnames(coor)[1:2] = c('UMAP_1','UMAP_2')
+  coor$barcode_type = barcode_anno
+  coor1 = coor[coor$barcode_type %in% c('other'),]
+  coor1$barcode_type = NA
+  coor1$border=NA
+  coor2 = coor[!coor$barcode_type %in% c('other'),]
+  coor2$border='with barcode'
+  if (mode=='single') {
+    coor2$barcode_type = meta[rownames(coor2),ct_key]
+  }
+  
+  p1=ggplot(coor1,aes(x=UMAP_1,y=UMAP_2,fill=barcode_type,color=border))+geom_point(data=coor1,size=bg_size,shape=21)+
+    geom_point(data=coor2,aes(x=UMAP_1,y=UMAP_2),shape=21,size=barcode_size)+theme_void()+
+    scale_color_manual(values = 'black', na.value = rgb(215/255,215/255,215/255))+
+    theme(text = element_text(size=16))+
+    scale_fill_manual(values = colors, na.value = rgb(215/255,215/255,215/255))+
+    guides(color="none")+theme(legend.position = "none")
+  return(p1)
+}
+germ_col = c('#98DF8AFF',
+             '#DBDB8DFF',
+             '#AEC7E8FF',
+             '#C5B0D5FF',
+             '#FFBB78FF')
+names(germ_col) = c('NeuroEctoderm','SurfaceEctoderm','Mesoderm',
+         'Endoderm','Extraembryonic')
+group_df = readRDS('/data/jiangjunyao/polyATAC/multiomi/multiomics_barcode_group.rds')
+group_df$barcodes = rownames(group_df)
+group_df[group_df$fate=='Endoderm-restricted','fate'] = 'Endoderm-bias'
+group_df[group_df$fate=='Mesoderm-restricted','fate'] = 'Mesoderm-bias'
+group_df[group_df$fate=='NeuroEctoderm-restricted','fate'] = 'NeuroEctoderm-bias'
+group_df[group_df$fate=='SurfaceEctoderm-restricted','fate'] = 'SurfaceEctoderm-bias'
+top_barcodes <- group_df %>%
+  group_by(fate) %>%
+  slice_max(order_by = size, n = 10) %>%
+  ungroup()
+top_barcodes = as.data.frame(top_barcodes)
+top_barcodes = top_barcodes[top_barcodes$size>5,]
+for (i in 1:nrow(top_barcodes)) {
+  id1 = paste(top_barcodes$barcodes[i],top_barcodes[i,2])
+  p1=clone_embedding(top_barcodes$barcodes[i],obj@meta.data,
+                     obj@reductions$umap@cell.embeddings,mode = 'single',
+                     barcode_key = 'barcodes',barcode_size = 5,
+                     ct_key = 'germ',colors = germ_col)+
+    ggtitle(id1)
+  print(p1)
+  ggsave(paste0('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/single cell embedding/clone_embedding/',
+                id1,'.pdf'),width = 10,height = 8)
+}
 ```
 
-### get smoothed dorc & expression value
 ```{r}
-### exp
-pm_smooth_rna = smooth_pseudotime(as.matrix(pm_obj@assays$RNA@data),pm_obj@meta.data,
-                                   em_fea,100,NULL,c('NMP','Paraxial mesoderm'))
-### DORC
-pm_smooth_dorc = smooth_pseudotime(as.matrix(pm_obj@assays$DORC@data),pm_obj@meta.data,
-                                  em_fea,100,NULL,c('NMP','Paraxial mesoderm'))
+gene_ac = readRDS('/data/jiangjunyao/polyATAC/multiomi/gene_activity.rds')
+gene_ex = obj@assays$RNA@data
+gene_use = intersect(rownames(gene_ac),rownames(gene_ex))
+gene_ac = gene_ac[gene_use,]
+gene_ex = gene_ex[gene_use,]
+metadata1 = obj@meta.data
+metadata1 = metadata1[!is.na(metadata1$barcodes),]
+metadata1 = metadata1[metadata1$pgen<0.001,]
+# 提取 barcodes
+
+
+as.data.frame(table(metadata1$barcodes))
+freq = as.data.frame(table(metadata1$barcodes))
+barcodes = as.character(freq[freq[,2]>2,1])
+all_cor = c()
+type1 = c()
+for (i in barcodes) {
+  # 获取当前 barcode 的列名
+
+  current_barcode <- rownames(metadata1[metadata1$barcodes==i,])
+  if (length(current_barcode)>2) {
+    for (j in barcodes) {
+      current_barcode2 <- rownames(metadata1[metadata1$barcodes==j,])
+      exp = rowMeans(gene_ex[,current_barcode])
+      acc = rowMeans(gene_ac[,current_barcode2])
+      cor1=cor(exp,acc,method = 'spearman')
+      all_cor = c(all_cor,cor1)
+      if (i==j) {
+        type1 = c(type1,'intra')
+      }else{
+        type1 = c(type1,'inter')
+      }
+    }
+  }
+
+
+}
+
+df1 = data.frame(all_cor,type1)
+write.csv(df1,'/data/jiangjunyao/polyATAC/multiomi/inter_intra_cor.csv')
 ```
 
-### DORC change before RNA
+
 ```{r}
-col1 = colorRampPalette(jdb_palette('brewer_marine'))(100)
-dorc_early_c = c('Hoxc6','Epha5','Sall4','Greb1','Tcea3','Hes1','Wnt3a','Hoxc5','Cdx4','Cdx2','Hoxa9','Hoxc8',
-                 'Gm53','Wnt5a','Prickle1','Hoxc9','Cyp26a1')
-pdf('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/dynamics_heatmap/PM_early_RNA.pdf',width = 6,height = 5)
-pheatmap(scale_mt(pm_smooth_rna[[2]][dorc_early_c,]),cluster_rows = F,cluster_cols = F,border_color = NA,
-         color=col1)
-dev.off()
-pdf('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/dynamics_heatmap/PM_early_DORC.pdf',width = 6,height = 5)
-pheatmap(scale_mt(pm_smooth_dorc[[2]][dorc_early_c,]),cluster_rows = F,cluster_cols = F,border_color = NA,
-         color=col1)
-dev.off()
+heatmap_col = c('#F7FBFF','#DEEBF7','#C6DBEF','#9ECAE1','#6BAED6','#4292C6',
+                  '#2171B5','#08519C','#08306B')
+coup = read.csv('/data/jiangjunyao/polyATAC/multiomi/multi_germ_coup.csv',row.names = 1)
+pheatmap(coup,clustering_method = 'mcquitty',color = colorRampPalette(heatmap_col)(50),border_color = NA,filename = '/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/cell type statistic and fraction plot/Multiome_heatmap_no_normalize.pdf',width = 10,height = 8)
+max_val = max(coup[coup<0.99])
+coup[coup>0.99] = max_val
+pheatmap(coup,clustering_method = 'mcquitty',color = colorRampPalette(heatmap_col)(50),border_color = NA,filename = '/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/cell type statistic and fraction plot/Multiome_heatmap.pdf',width = 10,height = 8)
 ```
 
-### DORC change after RNA
+
+
 ```{r}
-dorc_late_c = c('Ccnjl','Hoxc8','Slc2a3','Hoxa3','Ccdc171','Lix1','Fgf8','Myh9','Mcc','T','Evx1os',
-                'Sema6a')
-pdf('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/dynamics_heatmap/PM_late_RNA.pdf',width = 6,height = 5)
-pheatmap(scale_mt(pm_smooth_rna[[2]][dorc_late_c,]),cluster_rows = F,cluster_cols = F,border_color = NA,
-         color=col1)
-dev.off()
-pdf('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/dynamics_heatmap/PM_late_DORC.pdf',width = 6,height = 5)
-pheatmap(scale_mt(pm_smooth_dorc[[2]][dorc_late_c,]),cluster_rows = F,cluster_cols = F,border_color = NA,
-         color=col1)
-dev.off()
-```
+mm_tf_list <- read.table("~/public/mm_tf_list.txt", quote="\"", comment.char="")
 
-### Dynamics for single gene
-```{r,warning=FALSE}
-selected_gene = 'Cdx2'
-df_exp = data.frame(c(scale_vector(pm_smooth_dorc[[2]][selected_gene,]),
-                        scale_vector(pm_smooth_rna[[2]][selected_gene,])),
-                      c(1:100,1:100),
-                      c(rep('Mesoderm lineage DORC',100),
-                        rep('Mesoderm lineage RNA',100)))
-colnames(df_exp) = c('expression','pseudotime','lineage')
-ggplot(df_exp,aes(x=pseudotime,y=expression,color=lineage))+geom_line(size=0.5)+
-  theme_classic()+theme(text = element_text(size=16),plot.title = element_text(hjust = 0.5))+
-  scale_color_manual(values = c('#d71345','#009ad6','#00A651','#c7a252'))+ggtitle(selected_gene)+
-  ylab('Scaled expression')
-ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/dynamics_heatmap/early_cdx2.pdf',width = 7.5,height = 5)
-selected_gene = 'T'
-df_exp = data.frame(c(scale_vector(pm_smooth_dorc[[2]][selected_gene,]),
-                        scale_vector(pm_smooth_rna[[2]][selected_gene,])),
-                      c(1:100,1:100),
-                      c(rep('Mesoderm lineage DORC',100),
-                        rep('Mesoderm lineage RNA',100)))
-colnames(df_exp) = c('expression','pseudotime','lineage')
-ggplot(df_exp,aes(x=pseudotime,y=expression,color=lineage))+geom_line(size=0.5)+
-  theme_classic()+theme(text = element_text(size=16),plot.title = element_text(hjust = 0.5))+
-  scale_color_manual(values = c('#d71345','#009ad6','#00A651','#c7a252'))+ggtitle(selected_gene)+
-  ylab('Scaled expression')
-ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/dynamics_heatmap/late_T.pdf',width = 7.5,height = 5)
+grn_score = read.csv("~/polyATAC/nmp_final/celloracle_grn/grn_score.csv")
+grn_score$cluster[grn_score$cluster=='other'] = 'NMP with Balance fate'
+grn_score$cluster[grn_score$cluster=='Paraxial_mesoderm_bias'] = 'NMP with Paraxial mesoderm bias fate'
+grn_score$cluster[grn_score$cluster=='Spinal_cord_bias'] = 'NMP with Spinal cord bias fate'
+grn_score = grn_score[grn_score$X %in% mm_tf_list$V1,]
+grn_group_score = list()
+group_tf_list = list()
+top_number = 20
+all_tf = c()
+for (i in unique(grn_score$cluster)) {
+  grn_score_use = grn_score[grn_score$cluster==i,]
+  grn_score_use = grn_score_use[order(grn_score_use$degree_centrality_all,decreasing = T),]
+  group_tf_list[[i]] = grn_score_use[1:top_number,1]
+  all_tf = c(all_tf,grn_score_use[1:top_number,1])
+  grn_score_use = grn_score_use[1:top_number,]
+  grn_group_score[[i]] = grn_score_use
+  p1=ggplot(grn_score_use,aes(y=reorder(X,degree_centrality_all),x=degree_centrality_all,color='red'))+
+    geom_point(size=4)+scale_color_manual(values = '#145b7d')+theme_minimal()+
+    xlab('degree centrality')+ylab('')+theme(legend.position = "none",
+                                             text = element_text(size=16))+
+    ggtitle(paste0('Top 20 in ',i))+theme(plot.title = element_text(hjust = 0.5))
+  print(p1)
+  ggsave(paste0('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/nmp_grn/TF_degree_',i,'.pdf'),width = 6,height = 5)
+}
 
+pm_sp = grn_score[grn_score$cluster %in% c('NMP with Paraxial mesoderm bias fate',
+                                           'NMP with Spinal cord bias fate'),]
+pm_sp_plot = dcast(pm_sp,X~cluster,value.var = 'degree_centrality_all',
+                    fill = 0)
+colnames(pm_sp_plot)[2:3] = c('PM','SP')
+
+pm_sp_plot$type = 'other genes'
+cutoff = 0.075
+pm_sp_plot[pm_sp_plot$PM>cutoff & pm_sp_plot$SP<=cutoff,'type'] = 'Paraxial mesoderm bias specific'
+pm_sp_plot[pm_sp_plot$SP>cutoff & pm_sp_plot$PM<=cutoff,'type'] = 'Spinal cord bias specific'
+pm_sp_plot[pm_sp_plot$SP>cutoff & pm_sp_plot$PM>cutoff,'type'] = 'both'
+
+top_pm <- pm_sp_plot[pm_sp_plot$PM>cutoff,]
+top_sc <- pm_sp_plot[pm_sp_plot$SP>cutoff,]
+dual_tf = intersect(top_pm[,1],top_sc[,1])
+top_combined <- bind_rows(top_pm, top_sc) %>% 
+  distinct()
+
+ggplot(pm_sp_plot,aes(x=PM,y=SP,color=type))+geom_point()+theme_classic()+
+  geom_text_repel(data = top_combined,
+                  aes(label = X),
+                  size = 4,
+                  max.overlaps = 20,
+                  box.padding = unit(1, "lines"),
+                  point.padding = unit(0.5, "lines"),
+                  segment.color = 'grey')+
+  scale_color_manual(values = c('#f47a55','grey','#6950a1','#84bf96'))+
+  xlab('degree centrality for gens in GRN of \n Paraxial mesoderm bias NMP')+
+  ylab('degree centrality for gens in GRN of \n Spinal cord bias NMP')+
+  geom_vline(xintercept = cutoff, linetype = "dashed", color = "grey") +
+  geom_hline(yintercept = cutoff, linetype = "dashed", color = "grey")
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/nmp_grn/differential_network_node_075.pdf',
+       width = 10,height = 8)
+grn_pm = pm_sp_plot[pm_sp_plot$type=='Paraxial mesoderm bias specific',1]
+grn_sp = pm_sp_plot[pm_sp_plot$type=='Spinal cord bias specific',1]
+write.table(grn_pm,'/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/grn_venn_plot_gene_list/PM GRN.csv',
+          quote = F,row.names = F,col.names = F)
+write.table(grn_sp,'/data/jiangjunyao/polyATAC/polyatac_figure/multiomics fig/NMP_fate_analysis/grn_venn_plot_gene_list/SP GRN.csv',
+          quote = F,row.names = F,col.names = F)
 ```

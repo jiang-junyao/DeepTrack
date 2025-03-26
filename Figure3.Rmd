@@ -81,6 +81,7 @@ ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/all_embedding_no_legend/fig3/
 
 ## Plot gene modules
 ```{r}
+col1 <- colorRampPalette(c('#2166AC', '#4393C3','#92C5DE', '#D1E5F0', '#F7F7F7', '#FDDBC7', '#F4A582', '#D6604D', '#B2182B'))(100)
 for (i in unique(group_df_20241115$module)) {
   gene_use = group_df_20241115[group_df_20241115$module==i,1]
   mt1 = as.matrix(obj@assays$RNA@data[gene_use,])
@@ -88,12 +89,12 @@ for (i in unique(group_df_20241115$module)) {
   embed = as.data.frame(obj@reductions$diffmap@cell.embeddings)
   embed$expression = mt1
   ggplot(embed,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=expression))+geom_point(size=1.2)+
-    scale_color_gradientn(colors = jdb_palette("brewer_celsius"))+theme_void()+
+    scale_color_gradientn(colors = col1)+theme_void()+
     theme(text = element_text(size=16))+ggtitle(i)+guides(color = "none")
-  ggsave(paste0('/data/jiangjunyao/polyATAC/polyatac_figure/single cell fig/NMP_fate_analysis/module_average_expression/diffusionmap embedding_',i,'.pdf'),
+  ggsave(paste0('/data/jiangjunyao/polyATAC/polyatac_figure/single cell fig/NMP_fate_analysis/module_average_expression/diffusionmap embedding_nolegend',i,'.pdf'),
          width = 10,height = 8)
   print(ggplot(embed,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=expression))+geom_point(size=1.2)+
-    scale_color_gradientn(colors = jdb_palette("brewer_celsius"))+theme_void()+
+    scale_color_gradientn(colors = col1)+theme_void()+
     theme(text = element_text(size=16))+ggtitle(i))
   ggsave(paste0('/data/jiangjunyao/polyATAC/polyatac_figure/single cell fig/NMP_fate_analysis/module_average_expression/diffusionmap embedding_',i,'.pdf'),
          width = 10,height = 8)
@@ -177,7 +178,8 @@ pheatmap(cor(t(dual_lineage2)),cluster_cols = F,cluster_rows = F,
 dev.off()
 ```
 ### Plot single gene expression along trajectory
-```r
+```{r}
+col1 <- colorRampPalette(c('#2166AC', '#4393C3','#92C5DE', '#D1E5F0', '#F7F7F7', '#FDDBC7', '#F4A582', '#D6604D', '#B2182B'))(100)
 for (i in group_df_20241115$X ) {
   selected_gene = i
   module_name = group_df_20241115[group_df_20241115$X==i,3]
@@ -185,7 +187,7 @@ for (i in group_df_20241115$X ) {
   embed = as.data.frame(obj@reductions$diffmap@cell.embeddings)
   embed$expression = mt1
   ggplot(embed,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=expression))+geom_point(size=1.2)+
-    scale_color_gradientn(colors = jdb_palette("brewer_celsius"))+theme_void()+
+    scale_color_gradientn(colors = col1)+theme_void()+
     theme(text = element_text(size=16))+ggtitle(i)+guides(color = "none")
   ggsave(paste0('/data/jiangjunyao/polyATAC/polyatac_figure/single cell fig/NMP_fate_analysis/gene_pseudotime_dynamics/',module_name,'_',
                 i,'_UMAP.pdf'),width = 10,height = 8)
@@ -202,3 +204,18 @@ for (i in group_df_20241115$X ) {
                 i,'_line.pdf'),width = 10,height = 8)
 }
 ```
+
+### NMP epiblast fate
+```{r}
+epi_fate <- readRDS("~/polyATAC/all_barcode_kmeans_V2.rds")
+nmp_fate <- readRDS("~/polyATAC/nmp_final/only_barcodes_deg/nmp_barcode_fate_kmeans.rds")
+rownames(epi_fate) = epi_fate$barcodes
+nmp_fate$epi_fate = epi_fate[rownames(nmp_fate),'fate']
+df1 = celltype_sample_fraction(nmp_fate,'fate','epi_fate')
+df1 = data.frame(c(23.913043,6.521739,7.692308,43.956044),c('PM-NMP','PM-NMP','SC-NMP','SC-NMP'),c('Mesoderm-bias','NeuroEctoderm-bias','Mesoderm-bias','NeuroEctoderm-bias'))
+colnames(df1) = c('ratio','NMP_fate','epiblast_fate')
+ggplot(df1,aes(x=NMP_fate,y=ratio,fill=epiblast_fate))+geom_col(position = 'dodge',width = 0.6)+theme_minimal()+theme(text = element_text(size=16))+scale_fill_manual(values = c('#AEC7E8FF','#98DF8AFF'))
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/single cell fig/NMP_fate_analysis/NMP_fate_epiblast_fate_fraction.pdf',width = 8,height = 6)
+```
+
+### 

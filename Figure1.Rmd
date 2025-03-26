@@ -1,0 +1,185 @@
+---
+title: "Figure2_part1"
+author: "Jiang junyao"
+
+output: 
+  prettydoc::html_pretty:
+    toc: true
+    theme: cayman
+    highlight: github
+---
+Here is the script to generate figures in Figure 2 and related supplementary figures in the PolyATAC manuscript.
+
+### Load data
+```{r,message=FALSE}
+library(FateMapper)
+source('/data/jiangjunyao/polyATAC/github_script/help_function/fate_outcomes_function.R')
+germ_ratio = readRDS('/data/jiangjunyao/polyATAC/github_script/data/bulk fate/bulk_germ_ratio_0925.rds')
+germ_count = readRDS('/data/jiangjunyao/polyATAC/github_script/data/bulk fate/bulk_germ_count_0925.rds')
+tissue_count = readRDS('/data/jiangjunyao/polyATAC/github_script/data/bulk fate/bulk_tissue_count_0925.rds')
+tissue_ratio = readRDS('/data/jiangjunyao/polyATAC/github_script/data/bulk fate/bulk_tissue_ratio_0925.rds')
+group_df = readRDS('/data/jiangjunyao/polyATAC/github_script/data/bulk fate/barcode_kmeans_20240925.rds')
+group_df$sample=str_split(rownames(group_df),'_',simplify = T)[,2]
+bulk_germ = read.csv('/data/jiangjunyao/polyATAC/github_script/data/bulk fate/germ_anno.csv',row.names = 1)
+```
+
+### fate fraction across mouse
+```{r,message=FALSE}
+tissue_order <- read.csv("/data/jiangjunyao/polyATAC/github_script/data/bulk fate/tissue_order.csv", header = T)
+tissue_count = tissue_count[,tissue_order[,1]]
+tissue_ratio = tissue_ratio[,tissue_order[,1]]
+celltype_sample_fraction(group_df,'mouse','fate')
+```
+
+### plot fate outcomes heatmap for mouse1
+```{r,message=FALSE}
+mouse1_barcode = rownames(group_df[group_df$sample==3,])
+plot_epiblast_heatmap('tisuue',tissue_ratio[mouse1_barcode,],
+                      tissue_count[mouse1_barcode,],group_df[group_df$sample==3,],bulk_germ,
+                      'E:\\polyATAC\\bulk\\fate outcome/1008_bulk_tissue_mouse3_')
+plot_epiblast_heatmap('germ',germ_ratio[mouse1_barcode,],
+                      germ_count[mouse1_barcode,],group_df[group_df$sample==3,],bulk_germ,
+                      '')
+```
+
+### plot fate outcomes heatmap for mouse2
+```{r,message=FALSE}
+mouse2_barcode = rownames(group_df[group_df$sample==2,])
+plot_epiblast_heatmap('tisuue',tissue_ratio[mouse2_barcode,],
+                      tissue_count[mouse2_barcode,],group_df[group_df$sample==2,],bulk_germ,
+                      'E:\\polyATAC\\bulk\\fate outcome/1008_bulk_tissue_mouse2_')
+plot_epiblast_heatmap('germ',germ_ratio[mouse2_barcode,],
+                      germ_count[mouse2_barcode,],group_df[group_df$sample==2,],bulk_germ,
+                      'E:\\polyATAC\\bulk\\fate outcome/1008_bulk_germ_mouse2_')
+```
+
+### tissue fate analysis
+```{r}
+merge_list_count = list()
+merge_list_ratio = list()
+merge_index = read.csv('/data/jiangjunyao/polyATAC/github_script/data/bulk fate/bulk_tissue_merge_index.csv',
+                       header = F)
+merge_index = merge_index[merge_index$V1 %in% intersect(merge_index$V1,colnames(tissue_count)),]
+for (i in unique(merge_index[,2])) {
+  if (length(merge_index[,2][merge_index[,2]==i])>1) {
+    merge_list_count[[i]] = rowSums(tissue_count[,merge_index[,1][merge_index[,2]==i]])
+    merge_list_ratio[[i]] = rowSums(tissue_ratio[,merge_index[,1][merge_index[,2]==i]])
+  }else{
+    merge_list_count[[i]] = tissue_count[,i]
+    merge_list_ratio[[i]] = tissue_ratio[,i]
+  }
+}
+merge_count = as.data.frame(merge_list_count)
+merge_ratio = as.data.frame(merge_list_ratio)
+
+tissue_bias_type <- read.csv("/data/jiangjunyao/polyATAC/github_script/data/bulk fate/tissue_bias_type.csv", header=FALSE)
+rownames(tissue_bias_type) = tissue_bias_type[,1]
+summary_list = list()
+summary_read = list()
+for (i in 1:ncol(merge_ratio)) {
+  bias_fate = tissue_bias_type[colnames(merge_ratio)[i],2]
+  other_fate = unique(tissue_bias_type$V2)
+  other_fate = other_fate[other_fate!=bias_fate]
+  clone_fra = merge_ratio[,i]
+  names(clone_fra) = rownames(merge_ratio)
+  clone_fra = clone_fra[clone_fra!=0]
+  tissue_fate = group_df[names(clone_fra),2]
+  names(tissue_fate) = names(clone_fra)
+  tissue_fate[tissue_fate==bias_fate] = '2.Germ-bias'
+  #tissue_fate[grep('restricted',tissue_fate)] = '3.Germ-restricted'
+  tissue_fate[grep('Multi',tissue_fate)] = '1.Multilineage'
+  #tissue_fate[clone_fra==1] = '5.Tissue-restricted'
+  tissue_fate[clone_fra>0.5] = '3.Tissue-bias'
+  tissue_fate[tissue_fate %in% other_fate] = '4.Other'
+  fate_summary = as.data.frame(table(tissue_fate))
+  clone_num = length(clone_fra)
+  fate_summary$fraction = fate_summary[,2]/clone_num
+  fate_summary$tissue = colnames(merge_ratio)[i]
+  summary_list[[i]] = fate_summary
+  ### read count ratio
+  all_tissue_read = sum(merge_ratio[,i])
+  all_fate_read = c()
+  for (j in unique(tissue_fate)) {
+    barcode_tissue_fate = names(tissue_fate[tissue_fate==j])
+    fate_read = sum(merge_ratio[barcode_tissue_fate,i])
+    all_fate_read = c(all_fate_read,fate_read)
+  }
+  read_summary = data.frame(unique(tissue_fate),all_fate_read)
+  read_summary$fraction = read_summary[,2]/all_tissue_read
+  read_summary$tissue = colnames(merge_ratio)[i]
+  colnames(read_summary)[1] = 'tissue_fate'
+  summary_read[[i]] = read_summary
+}
+summary_df = do.call(bind_rows,summary_list)
+summary_df_read = do.call(bind_rows,summary_read)
+col1 = c(rgb(229/255,97/255,69/255),
+         rgb(103/255,193/255,227/255),
+         rgb(153/255,198/255,142/255),
+         'grey')
+
+multi_fra = summary_df_read[summary_df_read$tissue_fate=='1.Multilineage',]
+multi_fra = multi_fra[order(multi_fra$fraction,decreasing = T),]
+multi_fra$order = 1:(dim(multi_fra)[1])
+rownames(multi_fra) = multi_fra$tissue
+summary_df_read$order = multi_fra[summary_df$tissue,'order']
+
+mouse_number = str_split(rownames(merge_ratio),'_',simplify = T)
+for (z in c('2','3')) {
+  summary_list = list()
+  summary_read = list()
+  for (i in 1:ncol(merge_ratio)) {
+    mouse_use = merge_ratio[mouse_number[,2]==z,]
+
+    bias_fate = tissue_bias_type[colnames(merge_ratio)[i],2]
+    other_fate = unique(tissue_bias_type$V2)
+    other_fate = other_fate[other_fate!=bias_fate]
+
+    clone_fra = mouse_use[,i]
+    names(clone_fra) = rownames(mouse_use)
+    clone_fra = clone_fra[clone_fra!=0]
+    tissue_fate = group_df[names(clone_fra),2]
+    names(tissue_fate) = names(clone_fra)
+    tissue_fate[tissue_fate==bias_fate] = '1.Multi tissue contribution'
+    #tissue_fate[grep('restricted',tissue_fate)] = '3.Germ-restricted'
+    tissue_fate[grep('Multi',tissue_fate)] = '1.Multi tissue contribution'
+    #tissue_fate[clone_fra==1] = '5.Tissue-restricted'
+    tissue_fate[clone_fra>0.5] = '2.Tissue-bias'
+    tissue_fate[tissue_fate %in% other_fate] = '1.Multi tissue contribution'
+    fate_summary = as.data.frame(table(tissue_fate))
+    clone_num = length(clone_fra)
+    fate_summary$fraction = fate_summary[,2]/clone_num
+    fate_summary$tissue = colnames(mouse_use)[i]
+    summary_list[[i]] = fate_summary
+    ### read count ratio
+    all_tissue_read = sum(mouse_use[,i])
+    all_fate_read = c()
+    for (j in unique(tissue_fate)) {
+      barcode_tissue_fate = names(tissue_fate[tissue_fate==j])
+      fate_read = sum(mouse_use[barcode_tissue_fate,i])
+      all_fate_read = c(all_fate_read,fate_read)
+    }
+    read_summary = data.frame(unique(tissue_fate),all_fate_read)
+    read_summary$fraction = read_summary[,2]/all_tissue_read
+    read_summary$tissue = colnames(mouse_use)[i]
+    colnames(read_summary)[1] = 'tissue_fate'
+    summary_read[[i]] = read_summary
+  }
+  summary_df = do.call(bind_rows,summary_list)
+  summary_df_read = do.call(bind_rows,summary_read)
+  col1 = c(rgb(229/255,97/255,69/255),
+           rgb(103/255,193/255,227/255),
+           rgb(153/255,198/255,142/255),
+           'grey')
+
+
+  multi_fra = summary_df[summary_df$tissue_fate=='2.Tissue-bias',]
+  multi_fra = multi_fra[order(multi_fra$fraction,decreasing = T),]
+  multi_fra$order = 1:(dim(multi_fra)[1])
+  rownames(multi_fra) = multi_fra$tissue
+  summary_df$order = multi_fra[summary_df$tissue,'order']
+  print(ggplot(summary_df,aes(x=Freq,y=reorder(tissue,order),fill=tissue_fate))+
+    geom_col()+theme_classic()+scale_x_continuous(expand = c(0,0))+
+    xlab('Clone fate number')+ylab('Tissue')+
+    theme(text = element_text(size=15))+scale_fill_manual(values = col1))}
+```
+
