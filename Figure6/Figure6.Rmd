@@ -1,0 +1,232 @@
+---
+title: "Figure5"
+author: "Jiang junyao"
+
+output: 
+  prettydoc::html_pretty:
+    toc: true
+    theme: cayman
+    highlight: github
+---
+Here is the script to generate figures in Figure 3 and related supplementary figures in the PolyATAC manuscript.
+
+## Load data
+```{r, message=FALSE,warning=FALSE}
+library(tidyverse)
+library(ggpubr)
+library(Hmisc)
+library(corrplot)
+library(Seurat)
+library(BuenColors)
+obj <- readRDS("~/polyATAC/Cdx2 ko/cdx2_ko_wt.rds")
+DefaultAssay(obj) = 'RNA'
+obj = ScaleData(obj)
+celltype_color <- read.csv("~/polyATAC/color_gcy.csv", header=FALSE)
+celltype_color$V2 = gsub(' ','',celltype_color$V2)
+obj@meta.data[obj$orig.ident=='NX3','Batch']='1.wildtype'
+obj@meta.data[obj$orig.ident=='PX3','Batch']='2.Cdx2 KO'
+```
+
+## Plot NMP differentiation trajectory
+
+```{r, message=FALSE,warning=FALSE}
+plot_df = obj@meta.data
+plot_df$DiffusionMap_1 = obj@reductions$umap@cell.embeddings[,1]
+plot_df$DiffusionMap_2 = obj@reductions$umap@cell.embeddings[,2]
+ggplot(plot_df,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=celltype))+
+  geom_point(size=1)+scale_color_manual(values = celltype_color$V2,breaks = celltype_color$V1)+
+  theme_void()+theme(text = element_text(size=16))+theme(legend.position = "none")+ggtitle('all_sample')
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/KO fig/all sample embedding celltype.pdf',
+       width = 10,height = 8)
+plot_df_ko = plot_df[plot_df$Batch=='NX3',]
+ggplot(plot_df_ko,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=celltype))+
+  geom_point(size=1)+scale_color_manual(values = celltype_color$V2,breaks = celltype_color$V1)+
+  theme_void()+theme(text = element_text(size=16))+theme(legend.position = "none")+ggtitle('wildtype')
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/KO fig/wildtype embedding celltype.pdf',
+       width = 10,height = 8)
+plot_df_ko = plot_df[plot_df$Batch!='NX3',]
+ggplot(plot_df_ko,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=celltype))+
+  geom_point(size=1)+scale_color_manual(values = celltype_color$V2,breaks = celltype_color$V1)+
+  theme_void()+theme(text = element_text(size=16))+theme(legend.position = "none")+ggtitle('KO')
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/KO fig/KO embedding celltype.pdf',
+       width = 10,height = 8)
+```
+
+### celltype marker
+```{r}
+plot_df$expression = obj@assays$RNA@scale.data['Tbx6',]
+ggplot(plot_df,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=expression))+
+  geom_point(size=0.2)+scale_color_gradientn(colors = c("#E1E1E1","#B98A85","#6A0C15"))+
+  theme_void()+theme(text = element_text(size=16))+theme(legend.position = "none")
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/KO fig/Tbx6.pdf',
+       width = 10,height = 8)
+plot_df$expression = obj@assays$RNA@scale.data['Cdx4',]
+ggplot(plot_df,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=expression))+
+  geom_point(size=0.2)+scale_color_gradientn(colors = c("#E1E1E1","#B98A85","#6A0C15"))+
+  theme_void()+theme(text = element_text(size=16))+theme(legend.position = "none")
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/KO fig/Cdx4.pdf',
+       width = 10,height = 8)
+plot_df$expression = obj@assays$RNA@scale.data['Hes5',]
+ggplot(plot_df,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=expression))+
+  geom_point(size=0.2)+scale_color_gradientn(colors = c("#E1E1E1","#B98A85","#6A0C15"))+
+  theme_void()+theme(text = element_text(size=16))+theme(legend.position = "none")
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/KO fig/Hes5.pdf',
+       width = 10,height = 8)
+plot_df$expression = obj@assays$RNA@scale.data['Hbb-bs',]
+ggplot(plot_df,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=expression))+
+  geom_point(size=0.2)+scale_color_gradientn(colors = c("#E1E1E1","#B98A85","#6A0C15"))+
+  theme_void()+theme(text = element_text(size=16))+theme(legend.position = "none")
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/KO fig/Hbb-bs.pdf',
+       width = 10,height = 8)
+ggplot(plot_df,aes(x=DiffusionMap_1,y=DiffusionMap_2,color=expression))+
+  geom_point(size=0.2)+scale_color_gradientn(colors = c("#E1E1E1","#B98A85","#6A0C15"))+
+  theme_void()+theme(text = element_text(size=16))
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/KO fig/Hbb-bs_legend.pdf',
+       width = 10,height = 8)
+```
+### Cdx2 expression
+```{r}
+obj = NormalizeData(obj)
+ct_use = c('Spinal cord','Primitive erythroid cells','Neuromesodermal progenitors','Gut','Blood progenitors','Paraxial mesoderm')
+for (i in ct_use) {
+ obj_sub = subset(obj,celltype==i)
+ VlnPlot(obj_sub,'Cdx2',group.by = 'Batch')+stat_compare_means(method = "wilcox.test",
+                                                                    label.x.npc = "center")
+ ggsave(paste0('/data/jiangjunyao/polyATAC/polyatac_figure/KO fig/Cdx2_violin_',i,'.pdf'),width = 10,height = 8)
+}
+```
+
+
+
+```{r}
+celltype_sample_fraction <- function(scvi_meta,sample='orig.ident',
+                                     celltype='celltype',col1=NULL,break1=NULL){
+  library(BuenColors)
+  library(ggplot2)
+  library(Seurat)
+  ct_freq_list = list()
+  for (i in unique(scvi_meta[,sample])) {
+    print(i)
+    meta_use = scvi_meta[scvi_meta[,sample]==i,]
+    df1 = as.data.frame(table(meta_use[,celltype]))
+    colnames(df1) = c('celltype','number')
+    df1$sample = i
+    df1$number = (df1$number/sum(df1$number))*100
+    ct_freq_list[[i]] = df1
+  }
+  
+  ct_freq_df = do.call(bind_rows,ct_freq_list)
+  ct_freq_df = ct_freq_df[,c(1,3,2)]
+  ct_freq_df2 = reshape2::dcast(ct_freq_df,formula = celltype~sample)
+  if (is.null(col1)) {
+    col1 = jdb_palette('corona')
+  }
+  if (is.null(break1)) {
+    p1 = ggplot(ct_freq_df,aes(x=sample,y=number,fill=celltype))+geom_col() + theme_classic() +
+      scale_fill_manual(values = col1)+
+      guides(color = guide_legend(override.aes = list(size = 4)))+theme(text=element_text(size=15))+
+      xlab('')+scale_y_continuous(expand = c(0,0))+ylab('ratio(%)')+
+      theme(axis.text.x = element_text(vjust = 0.5, hjust = 0.5,
+                                       angle = 35))
+  }else{
+    p1 = ggplot(ct_freq_df,aes(x=sample,y=number,fill=celltype))+geom_col() + theme_classic() +
+      scale_fill_manual(values = col1,breaks = break1)+
+      guides(color = guide_legend(override.aes = list(size = 4)))+theme(text=element_text(size=15))+
+      xlab('')+scale_y_continuous(expand = c(0,0))+ylab('ratio(%)')+
+      theme(axis.text.x = element_text(vjust = 0.5, hjust = 0.5,
+                                       angle = 35))
+  }
+  
+  print(p1)
+  return(ct_freq_df2)
+}
+ct_order = intersect(celltype_color$V1,obj$celltype)
+ct_order = ct_order[c(1:9,11,13:21,23:32,12,10,22)]
+obj$ct_order = factor(obj$celltype,levels = ct_order)
+celltype_color = celltype_color[celltype_color$V1 %in% ct_order,]
+df1=celltype_sample_fraction(obj@meta.data,sample = 'Batch',col1 = celltype_color$V2[c(1:9,11,13:21,23:32,12,10,22)],
+                         break1 = celltype_color$V1[c(1:9,11,13:21,23:32,12,10,22)],celltype = 'ct_order')
+colnames(df1) = c('wildtype','KO')
+write.csv(df1,'/data/jiangjunyao/polyATAC/polyatac_figure/KO fig/Cdx2 ko celltype fraction.csv')
+```
+
+### NMP lineage detail
+```{r}
+obj$sample_ct = paste0(obj$Batch,'#',obj$celltype)
+ct_freq = as.data.frame(table(obj$sample_ct))
+ct_freq = cbind(ct_freq,str_split(ct_freq$Var1,'#',simplify = T))
+ct_freq = ct_freq[ct_freq[,4] %in% c('Neuromesodermal progenitors',
+                                   'Paraxial mesoderm',
+                                   'Spinal cord'),]
+colnames(ct_freq) = c('key','number','sample','celltype')
+ct_freq$total_number = c(rep(13901,3),rep(11098,3))
+ct_freq$ratio = ct_freq$number/ct_freq$total_number
+ggplot(ct_freq,aes(x=celltype,y=ratio,fill=sample))+
+  geom_col(position = 'dodge')+theme_classic()+
+theme(text = element_text(size=16))+
+  scale_fill_manual(values = jdb_palette('corona')[1:2])
+```
+
+### blood lineage detail
+```{r}
+obj$sample_ct = paste0(obj$Batch,'#',obj$celltype)
+ct_freq = as.data.frame(table(obj$sample_ct))
+ct_freq = cbind(ct_freq,str_split(ct_freq$Var1,'#',simplify = T))
+ct_freq = ct_freq[ct_freq[,4] %in% c('Blood progenitors',
+                                   'Primitive erythroid cells'),]
+colnames(ct_freq) = c('key','number','sample','celltype')
+ct_freq$total_number = c(rep(13901,2),rep(11098,2))
+ct_freq$ratio = ct_freq$number/ct_freq$total_number
+ggplot(ct_freq,aes(x=celltype,y=ratio,fill=sample))+
+  geom_col(position = 'dodge')+theme_classic()+
+theme(text = element_text(size=16))+
+  scale_fill_manual(values = jdb_palette('corona')[1:2])
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/KO fig/blood lineage fraction.pdf',width = 10,height = 8)
+```
+
+
+```{r}
+umap = read.csv('/data/jiangjunyao/polyATAC/Cdx2 ko/nmp_merge/umap.csv',row.names = 1)
+meta = read.csv('/data/jiangjunyao/polyATAC/Cdx2 ko/nmp_merge/meta.csv',row.names = 1)
+fate_col = c('#4DB6AC',
+             '#0D47A1','#1B5E20','#9ECAE1','#C5E1A5')
+ct_col = c('#0D47A1','#1B5E20','#4DB6AC')
+names(ct_col) = c('Paraxial mesoderm','Spinal cord','Neuromesodermal progenitors')
+names(fate_col) = c('Balance','Paraxial mesoderm','Spinal cord',"Paraxial_mesoderm_bias","Spinal_cord_bias")
+umap$celltype = meta$celltype
+umap$batch = meta$Batch
+umap_ref = umap[!umap$batch %in% c('1.wildtype','2.Cdx2 KO'),]
+umap$celltype1 = umap$celltype
+umap[!umap$celltype %in% c('Spinal cord','Paraxial mesoderm'),'celltype1'] = 'Neuromesodermal progenitors'
+ggplot(umap_ref,aes(x=X0,y=X1,color=celltype))+geom_point(size=0.8)+theme_void()+scale_color_manual(values = fate_col)
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/KO fig/NMP_lineage_fate.pdf',width = 10,height = 8)
+ggplot(umap,aes(x=X0,y=X1,color=celltype1))+geom_point(size=0.8)+theme_void()+scale_color_manual(values = ct_col)
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/KO fig/NMP_lineage_celltype.pdf',width = 10,height = 8)
+umap$ko = ifelse(umap$batch=='2.Cdx2 KO','yes',NA)
+umap$wt = ifelse(umap$batch=='1.wildtype','yes',NA)
+umap$nmp_ko = NA
+umap$nmp_wt = NA
+umap[umap$batch=='2.Cdx2 KO','ko'] = umap[umap$batch=='2.Cdx2 KO','celltype']
+umap[umap$batch=='1.wildtype','wt'] = umap[umap$batch=='1.wildtype','celltype']
+umap[umap$batch=='2.Cdx2 KO' & umap$celltype=='Neuromesodermal progenitors','nmp_ko'] = 'Neuromesodermal progenitors'
+umap[umap$batch=='1.wildtype' & umap$celltype=='Neuromesodermal progenitors','nmp_wt'] = 'Neuromesodermal progenitors'
+ko1 = umap[is.na(umap$ko),]
+ko2 = umap[!is.na(umap$ko),]
+wt1 = umap[is.na(umap$wt),]
+wt2 = umap[!is.na(umap$wt),]
+wt2 = umap[!is.na(umap$wt),]
+nmp1 = umap[is.na(umap$nmp_ko),]
+nmp2 = umap[!is.na(umap$nmp_ko),]
+nmp3 = umap[is.na(umap$nmp_wt),]
+nmp4 = umap[!is.na(umap$nmp_wt),]
+ggplot(ko1,aes(x=X0,y=X1,color=ko))+geom_point(size=0.5)+theme_void()+
+  scale_color_manual(values = ct_col,na.value = rgb(234/255,234/255,234/255))+geom_point(size=1,data = ko2)
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/KO fig/NMP_lineage_only_KO.pdf',width = 10,height = 8)
+ggplot(wt1,aes(x=X0,y=X1,color=wt))+geom_point(size=0.5)+theme_void()+
+  scale_color_manual(values = ct_col,na.value = rgb(234/255,234/255,234/255))+geom_point(size=1,data = wt2)
+ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/KO fig/NMP_lineage_only_WT.pdf',width = 10,height = 8)
+ggplot(nmp1,aes(x=X0,y=X1,color=nmp_ko))+geom_point(size=0.5)+theme_void()+
+  scale_color_manual(values = ct_col,na.value = rgb(234/255,234/255,234/255))+geom_point(size=2,data = nmp2)
+ggplot(nmp3,aes(x=X0,y=X1,color=nmp_wt))+geom_point(size=0.5)+theme_void()+
+  scale_color_manual(values = ct_col,na.value = rgb(234/255,234/255,234/255))+geom_point(size=2,data = nmp4)
+```

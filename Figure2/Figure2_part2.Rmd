@@ -1,0 +1,149 @@
+---
+title: "Figure2_part2"
+author: "Jiang junyao"
+
+output: 
+  prettydoc::html_pretty:
+    toc: true
+    theme: cayman
+    highlight: github
+---
+
+### load data
+```{r,message=FALSE}
+library(Seurat)
+library(tidyverse)
+library(reshape2)
+library(BuenColors)
+library(pheatmap)
+library(ggtree)
+library(BuenColors)
+heatmap_col = c('#F7FBFF','#DEEBF7','#C6DBEF','#9ECAE1','#6BAED6','#4292C6',
+                  '#2171B5','#08519C','#08306B')
+celltype_color <- read.csv("/data/jiangjunyao/polyATAC/color_gcy.csv",header = F)
+celltype_color$V2 = gsub(' ','',celltype_color$V2)
+neuo_meta = read.csv('/data/jiangjunyao/polyATAC/subcelltype_coupling/brain20250629/neuo_meta.csv',row.names = 1)
+sc = readRDS('/data/jiangjunyao/polyATAC/subcelltype_coupling/brain20250629/sc_sub.rds')
+hindbrain = readRDS('/data/jiangjunyao/polyATAC/subcelltype_coupling/brain20250629/hindbrain_sub.rds')
+sc_meta = sc@meta.data
+sc_meta$umap1 = sc@reductions$umap@cell.embeddings[,1]
+sc_meta$umap2 = sc@reductions$umap@cell.embeddings[,2]
+### load coupling
+brain_coup_ap = read.csv('/data/jiangjunyao/polyATAC/subcelltype_coupling/brain20250629/brain_noe8_count_coup.csv',row.names = 1)
+colnames(brain_coup_ap) = rownames(brain_coup_ap)
+brain_coup_dv = read.csv('/data/jiangjunyao/polyATAC/subcelltype_coupling/brain20250629/brain_DV_AP_count_coup2.csv',row.names = 1)
+colnames(brain_coup_dv) = rownames(brain_coup_dv)
+bh_coup = read.csv('/data/jiangjunyao/polyATAC/subcelltype_coupling/brain_head_body/e95_coup.csv',row.names = 1)
+colnames(bh_coup) = rownames(bh_coup)
+###
+ggplot(neuo_meta,aes(x=umap1,y=umap2,color=celltype))+geom_point(size=0.1)+
+  scale_color_manual(values=celltype_color$V2,breaks = celltype_color$V1)+
+  theme_void()+theme(text = element_text(size=15))+theme(legend.position = "none")
+ggsave('/data/jiangjunyao/polyATAC/figure_after_science/single cell fig/subcluster lineage analysis/all_neuo_ct_embedding.pdf',width = 10,height = 8)
+```
+
+### spinal cord A-P analysis
+```{r}
+ggplot(sc_meta,aes(x=umap1,y=umap2,color=celltype))+geom_point(size=0.3)+
+  scale_color_manual(values=c("#C0CB79","#94874A"))+
+  theme_void()+theme(text = element_text(size=15))+theme(legend.position = "none")
+ggsave('/data/jiangjunyao/polyATAC/figure_after_science/single cell fig/subcluster lineage analysis/A P/spinal_cord_ap_subtype.pdf',width = 10,height = 8)
+
+filtered_vals <- brain_coup_ap[brain_coup_ap < 0.99]
+break1 = seq(0,max(filtered_vals),length.out=100)
+pheatmap(brain_coup_ap,clustering_method = 'mcquitty',breaks=break1,
+         border_color = NA,color=colorRampPalette(heatmap_col)(100),
+         width = 10,height = 8)
+```
+
+
+### D-V analysis
+```{r,message=FALSE,warning=FALSE}
+sc_a = subset(sc,celltype=='Spinal cord (anterior)')
+sc_a = RunUMAP(sc_a,reduction = 'scvi',dims = 1:10,min.dist = 0.7)
+sc_a_meta = sc_a@meta.data
+sc_a_meta$umap1 = sc_a@reductions$umap@cell.embeddings[,1]
+sc_a_meta$umap2 = sc_a@reductions$umap@cell.embeddings[,2]
+ggplot(sc_a_meta,aes(x=umap1,y=umap2,color=celltype2))+geom_point(size=0.3)+
+  scale_color_manual(values=c('#AF549C','#3985C7'))+
+  theme_void()+theme(text = element_text(size=15))+theme(legend.position = "none")
+ggsave('/data/jiangjunyao/polyATAC/figure_after_science/single cell fig/subcluster lineage analysis/D V/spinal_cord_dv_subtype.pdf',width = 10,height = 8)
+for (i in c('Zic1','Pax3')) {
+  FeaturePlot(sc_a,i,pt.size=0.6,cols = c("lightgrey",'#AF549C'))+theme_void()+
+    theme(text = element_text(size=15))+
+    theme(legend.position = "none")
+  ggsave(paste0('/data/jiangjunyao/polyATAC/figure_after_science/single cell fig/subcluster lineage analysis/D V/spinal_cord_',i,'.pdf'),width = 10,height = 8)
+}
+for (i in c('Nkx2-9','Nkx6-1')) {
+  FeaturePlot(sc_a,i,pt.size=0.6,cols = c("lightgrey",'#3985C7'))+theme_void()+
+    theme(text = element_text(size=15))+
+    theme(legend.position = "none")
+  ggsave(paste0('/data/jiangjunyao/polyATAC/figure_after_science/single cell fig/subcluster lineage analysis/D V/spinal_cord_',i,'.pdf'),width = 10,height = 8)
+}
+
+hindbrain_meta = hindbrain@meta.data
+hindbrain_meta$umap1 = hindbrain@reductions$umap@cell.embeddings[,1]
+hindbrain_meta$umap2 = hindbrain@reductions$umap@cell.embeddings[,2]
+ggplot(hindbrain_meta,aes(x=umap1,y=umap2,color=celltype2))+geom_point(size=0.3)+
+  scale_color_manual(values=c(rgb(109/255,158/255,193/255),rgb(228/255,103/255,38/255)))+
+  theme_void()+theme(text = element_text(size=15))+theme(legend.position = "none")
+ggsave('/data/jiangjunyao/polyATAC/figure_after_science/single cell fig/subcluster lineage analysis/D V/hindbrain_dv_subtype.pdf',width = 10,height = 8)
+for (i in c('Zic1','Pax3')) {
+  FeaturePlot(hindbrain,i,pt.size=0.6,cols = c("lightgrey",'#AF549C'))+theme_void()+
+    theme(text = element_text(size=15))+
+    theme(legend.position = "none")
+  ggsave(paste0('/data/jiangjunyao/polyATAC/figure_after_science/single cell fig/subcluster lineage analysis/D V/hindbrain_',i,'.pdf'),width = 10,height = 8)
+}
+for (i in c('Nkx2-9','Nkx6-1')) {
+  FeaturePlot(hindbrain,i,pt.size=0.6,cols = c("lightgrey",'#3985C7'))+theme_void()+
+    theme(text = element_text(size=15))+
+    theme(legend.position = "none")
+  ggsave(paste0('/data/jiangjunyao/polyATAC/figure_after_science/single cell fig/subcluster lineage analysis/D V/hindbrain_',i,'.pdf'),width = 10,height = 8)
+}
+
+
+filtered_vals <- brain_coup_dv[brain_coup_dv < 0.99]
+break1 = seq(0,max(filtered_vals),length.out=100)
+#pheatmap(brain_coup,clustering_method = 'mcquitty')
+pheatmap(brain_coup_dv,clustering_method = 'mcquitty',breaks=break1,
+         border_color = NA,color=colorRampPalette(heatmap_col)(100),
+         width = 10,height = 8,filename = '/data/jiangjunyao/polyATAC/figure_after_science/single cell fig/subcluster lineage analysis/D V/brain_dv_coup_heatmap.pdf')
+```
+
+### head-body
+```{r}
+ct_use = str_split(colnames(bh_coup),'-',simplify = T)
+ct_use_idx = (!ct_use[,1] %in% c("Retinal primordium","Mesencephalon/MHB",
+                         "Di/telencephalon","Anterior floor plate",
+                         "Neuromesodermal progenitors","Motor neurons",'Roof plate'))
+bh_coup2 = bh_coup[ct_use_idx,ct_use_idx]
+filtered_vals <- bh_coup2[bh_coup2 < 0.99]
+break1 = seq(0,max(filtered_vals),length.out=100)
+pheatmap(bh_coup[ct_use_idx,ct_use_idx],clustering_method = 'mcquitty',breaks=break1,
+         border_color = NA,color=colorRampPalette(heatmap_col)(100),filename = '/data/jiangjunyao/polyATAC/figure_after_science/single cell fig/subcluster lineage analysis/body head/body_head_coup_heatmap.pdf')
+```
+
+
+### deconvolution weight
+```{r,message=FALSE}
+e95_10x = readRDS('/data/jiangjunyao/polyATAC/E9_10 visium/e95_sc_sub.rds')
+FeaturePlot(e95_10x,"Spinal cord (anterior)",reduction = 'spatial',
+            pt.size=2.5,min.cutoff = 0.2,max.cutoff = 0.6)+theme_void()+theme(
+              plot.title = element_text(hjust = 0.5),
+              text = element_text(size=16))
+ggsave('/data/jiangjunyao/polyATAC/figure_after_science/spatial fig/deconvolution/E9_Spinal cord (anterior).pdf',width = 8,height = 10)
+FeaturePlot(e95_10x,"Spinal cord (posterior)",reduction = 'spatial',
+            pt.size=2.5,min.cutoff = 0.2,max.cutoff = 0.6)+theme_void()+theme(
+              plot.title = element_text(hjust = 0.5),
+              text = element_text(size=16))
+ggsave('/data/jiangjunyao/polyATAC/figure_after_science/spatial fig/deconvolution/E9_Spinal cord (posterior).pdf',width = 8,height = 10)
+  # FeaturePlot(e105_10x,i,reduction = 'spatial',pt.size=3,max.cutoff=0.5)+theme_void()+theme(
+  #   plot.title = element_text(hjust = 0.5),
+  #   text = element_text(size=16)
+  # )
+  # ggsave(paste0('/data/jiangjunyao/polyATAC/polyatac_figure/spatial fig/deconvolution/E10_',
+  #               i,'.pdf'),width = 8,height = 10)
+
+
+```
+

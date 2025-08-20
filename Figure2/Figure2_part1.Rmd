@@ -1,0 +1,163 @@
+---
+title: "Figure2_part1"
+author: "Jiang junyao"
+
+output: 
+  prettydoc::html_pretty:
+    toc: true
+    theme: cayman
+    highlight: github
+---
+Here is the script to generate figures in Figure 2 and related supplementary figures in the PolyATAC manuscript.
+
+## Load data
+```{r}
+library(tidyverse)
+library(ggpubr)
+library(pheatmap)
+library(Seurat)
+library(BuenColors)
+source('/data/jiangjunyao/polyATAC/github_script/help_function/figure2_help_function.R')
+celltype_color <- read.csv("/data/jiangjunyao/polyATAC/color_gcy.csv",header = F)
+celltype_color$V2 = gsub(' ','',celltype_color$V2)
+metadata = read.csv('/data/jiangjunyao/polyATAC/github_script/data/metadata_0703.csv',
+                    row.names = 1)
+heatmap_col = c('#F7FBFF','#DEEBF7','#C6DBEF','#9ECAE1','#6BAED6','#4292C6',
+                  '#2171B5','#08519C','#08306B')
+germ_col = c('#98DF8AFF',
+             '#DBDB8DFF',
+             '#AEC7E8FF',
+             '#C5B0D5FF',
+             '#FFBB78FF')
+germ = c('NeuroEctoderm','SurfaceEctoderm','Mesoderm',
+         'Endoderm','Extraembryonic')
+```
+
+## Plot cell embedding
+
+```{r}
+ggplot(metadata,aes(x=umap1,y=umap2,color=celltype))+geom_point(size=0.1)+
+  scale_color_manual(values=celltype_color$V2,breaks = celltype_color$V1)+
+  theme_void()+theme(text = element_text(size=15))+theme(legend.position = "none")
+ggsave('/data/jiangjunyao/polyATAC/figure_after_science/single cell fig/all_embedding_no_legend/fig2/fig2_celltype.pdf',
+       width = 10,height = 8)
+ggplot(metadata,aes(x=umap1,y=umap2,color=neuron_only))+geom_point(size=0.1)+
+  scale_color_manual(values=celltype_color$V2,breaks = celltype_color$V1)+
+  theme_void()+theme(text = element_text(size=15))+theme(legend.position = "none")
+ggsave('/data/jiangjunyao/polyATAC/figure_after_science/single cell fig/all_embedding_no_legend/fig2/fig2_neuron_only.pdf',
+       width = 10,height = 8)
+germ_col = c('#98DF8AFF',
+             '#DBDB8DFF',
+             '#AEC7E8FF',
+             '#C5B0D5FF',
+             '#FFBB78FF')
+germ = c('NeuroEctoderm','SurfaceEctoderm','Mesoderm',
+         'Endoderm','Extraembryonic')
+ggplot(metadata,aes(x=umap1,y=umap2,color=germ))+geom_point(size=0.1)+
+  scale_color_manual(values=germ_col,breaks = germ)+
+  theme_void()+theme(text = element_text(size=15))+theme(legend.position = "none")+theme(legend.position = "none")
+ggsave('/data/jiangjunyao/polyATAC/figure_after_science/single cell fig/all_embedding_no_legend/fig2/fig2_germ.pdf',
+       width = 10,height = 8)
+
+ggplot(metadata,aes(x=umap1,y=umap2,color=time))+geom_point(size=0.1)+
+  theme_void()+theme(text = element_text(size=15))+
+  scale_color_manual(values = jdb_palette('brewer_spectra'))+theme(legend.position = "none")
+ggsave('/data/jiangjunyao/polyATAC/figure_after_science/single cell fig/all_embedding_no_legend/fig2/fig2_time.pdf',
+       width = 10,height = 8)
+ggplot(metadata,aes(x=umap1,y=umap2,color=detection))+geom_point(size=0.1)+
+  theme_void()+theme(text = element_text(size=15))+
+  scale_color_manual(values = c('#a7324a','grey'))+NoLegend()+theme(legend.position = "none")
+ggsave('/data/jiangjunyao/polyATAC/figure_after_science/single cell fig/all_embedding_no_legend/fig2/fig2_detection.pdf',
+       width = 10,height = 8)
+# plot_time_emb2 <-function(meta,time1,col1='time'){
+#   meta$x = meta$umap1
+#   meta$y = meta$umap2
+#   meta$use_col = meta[,col1]
+#   meta_plot1 = meta[meta[,col1]!=time1,]
+#   meta_plot1$use_col='ohter'
+#   meta_plot2 = meta[meta[,col1]==time1,]
+#   meta$use_col = meta
+#   ggplot(meta_plot1,aes(x=x,y=y,color=use_col))+geom_point(size=0.1)+
+#     scale_color_manual(values = c('grey','#a7324a'))+theme_void()+
+#     geom_point(data=meta_plot2,aes(x=x,y=y,color=use_col),size=0.2)+theme(legend.position = "none")
+# }
+# plot_time_emb2(metadata,'with barcode','detection')
+# ggsave('/data/jiangjunyao/polyATAC/polyatac_figure/all_embedding_no_legend/fig2/fig2_detection.pdf',
+#        width = 10,height = 8)
+```
+
+### Pgen
+```{r}
+fatebias=c('Endoderm-bias'='#C5B0D5FF',
+                              'Mesoderm-bias'='#AEC7E8FF',
+                              'NeuroEctoderm-bias'='#98DF8AFF',
+                              'SurfaceEctoderm-bias'='#DBDB8DFF',
+                              "Extraembryonic-bias"='#FFBB78FF',
+                              'Multilineage'=rgb(242/255,150/255,155/255))
+group_df = readRDS('/data/jiangjunyao/polyATAC/all_barcode_kmeans_V3.rds')
+list1 = list()
+for (i in c(0.001,0.0001,0.00001)) {
+  group_df_use = group_df[group_df$pgen<i,]
+  df1 = as.data.frame(table(group_df_use$fate))
+  df1$ratio = df1[,2]/sum(df1[,2])
+  df1$pgen = as.character(i)
+  list1[[as.character(i)]] = df1
+}
+df_ratio = do.call(bind_rows,list1)
+ggplot(df_ratio,aes(x=pgen,y=ratio,fill=Var1))+geom_col()+
+  scale_fill_manual(values = fatebias)+theme_classic()+
+  scale_y_continuous(expand = c(0,0))+theme(text = element_text(size=16))
+ggsave('/data/jiangjunyao/polyATAC/figure_after_science/single cell fig/cell type statistic and fraction plot/Pgen_fate_fraction.pdf',width = 10,height = 8)
+```
+
+### celltype barcode
+```{r}
+plot_sclt_statistic = function(metadata,idx='celltype'){
+  all_diversity = c()
+  all_detection = c()
+  all_number = c()
+  for (i in unique(metadata[,idx])) {
+    meta_use = metadata[metadata[,idx]==i,]
+    all_number = c(all_number,nrow(meta_use))
+    all_detection = c(all_detection,
+                      nrow(meta_use[meta_use$detection=='with barcode',])/nrow(meta_use))
+    meta_use = meta_use[!is.na(meta_use$barcodes),]
+    all_diversity = c(all_diversity,length(unique(meta_use$barcodes)))
+  }
+  barcode_statistic = data.frame(all_diversity,all_detection,all_number,
+                                 unique(metadata[,idx]))
+  colnames(barcode_statistic) = c('unique_barcode_number','detection_rate',
+                                  'cell_number','celltype')
+  barcode_statistic = barcode_statistic[order(barcode_statistic$unique_barcode_number),]
+  barcode_statistic$order = 1:nrow(barcode_statistic)
+  ggplot(barcode_statistic,aes(x=unique_barcode_number,y=reorder(celltype,order)))+
+    geom_point(aes(size=cell_number,color=detection_rate))+
+    theme_minimal()+scale_color_gradientn(colors = jdb_palette("solar_basic"))+
+    xlab('Unique barcode number')+ylab('Cell types')+
+    theme(text = element_text(size=15))
+  return(barcode_statistic)
+}
+plot_sclt_statistic(metadata,'celltype')
+ggsave('/data/jiangjunyao/polyATAC/figure_after_science/single cell fig/cell type statistic and fraction plot/celltype barcode statistic.pdf',
+       width = 10,height = 8)
+```
+
+
+### germ-layer lineage tree
+```{r}
+dir1 = dir('/data/jiangjunyao/polyATAC/germ_lineage/')
+dir1 = dir1[grep('coup',dir1)]
+for (i in dir1) {
+  coup = read.csv(paste0('/data/jiangjunyao/polyATAC/germ_lineage/',i),row.names = 1)
+  coup <- coup[rownames(coup) != "Extraembryonic", ]
+  coup <- coup[, colnames(coup) != "Extraembryonic"]
+  filtered_vals <- coup[coup < 0.99]
+  break1 = seq(0,max(filtered_vals),length.out=100)
+  pheatmap(coup,clustering_method = 'single',breaks = break1,
+           color = colorRampPalette(heatmap_col)(100),
+           border_color = NA,filename =paste0('/data/jiangjunyao/polyATAC/figure_after_science/single cell fig/germ_lineage_similarity/heatmap_',
+                                              i,'.pdf'),width = 8,height = 6)
+}
+
+```
+
